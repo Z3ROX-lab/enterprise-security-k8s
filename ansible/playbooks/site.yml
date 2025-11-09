@@ -1,0 +1,65 @@
+---
+# Playbook principal - Déploiement complet de la stack de sécurité
+- name: Enterprise Security Stack - Déploiement complet
+  hosts: localhost
+  gather_facts: yes
+
+  vars:
+    project_root: "{{ playbook_dir }}/../.."
+
+  pre_tasks:
+    - name: Afficher les informations de déploiement
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════════╗
+          ║  Enterprise Security Stack - Déploiement Ansible         ║
+          ║  Kubernetes Security Architecture                        ║
+          ╚═══════════════════════════════════════════════════════════╝
+
+          Cluster: {{ cluster_name }}
+          Environment: {{ ansible_env.USER }}@{{ ansible_hostname }}
+          Python: {{ ansible_python_version }}
+
+    - name: Vérifier les prérequis
+      include_tasks: tasks/check-prerequisites.yml
+
+  roles:
+    - role: prerequisites
+      tags: [prerequisites, setup]
+
+    - role: cluster-hardening
+      tags: [hardening, security]
+      when: enable_hardening | default(true)
+
+    - role: network-policies
+      tags: [network, policies]
+      when: enable_network_security | default(true)
+
+    - role: monitoring-config
+      tags: [monitoring, observability]
+      when: enable_monitoring | default(true)
+
+    - role: security-automation
+      tags: [automation, soar]
+      when: enable_automation | default(true)
+
+  post_tasks:
+    - name: Afficher le résumé du déploiement
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════════╗
+          ║            Déploiement terminé avec succès !             ║
+          ╚═══════════════════════════════════════════════════════════╝
+
+          Services déployés:
+          ✓ IAM (Keycloak + Vault)
+          ✓ SIEM (ELK Stack + Prometheus/Grafana)
+          ✓ EDR (Falco + Wazuh)
+          ✓ Network Security (NetworkPolicies + Calico)
+          ✓ Policy Enforcement (OPA Gatekeeper)
+          ✓ Supply Chain (Trivy Operator)
+
+          Commandes utiles:
+          kubectl get pods --all-namespaces
+          kubectl port-forward -n security-siem svc/prometheus-grafana 3000:80
+          kubectl port-forward -n security-iam svc/keycloak 8080:80

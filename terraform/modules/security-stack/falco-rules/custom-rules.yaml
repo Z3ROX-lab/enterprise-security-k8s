@@ -1,0 +1,126 @@
+# Custom Falco Rules - Enterprise Security Stack
+# Détection de menaces spécifiques aux environnements Kubernetes
+
+- rule: Unauthorized Process in Container
+  desc: Détecte des processus non autorisés dans les conteneurs
+  condition: >
+    spawned_process and container
+    and not proc.name in (java, node, python, nginx, httpd, postgres)
+    and not container.image.repository in (busybox, alpine, ubuntu)
+  output: >
+    Unauthorized process started in container
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [container, process]
+
+- rule: Crypto Mining Detection
+  desc: Détecte des processus de crypto-mining
+  condition: >
+    spawned_process and (
+      proc.name in (xmrig, minerd, ccminer, ethminer, stratum) or
+      proc.cmdline contains "stratum+tcp" or
+      proc.cmdline contains "cryptonight"
+    )
+  output: >
+    Crypto mining process detected
+    (user=%user.name command=%proc.cmdline container=%container.name)
+  priority: CRITICAL
+  tags: [malware, cryptomining]
+
+- rule: Reverse Shell Attempt
+  desc: Détecte les tentatives de reverse shell
+  condition: >
+    spawned_process and (
+      (proc.name in (nc, ncat, netcat) and proc.args contains "-e") or
+      (proc.name = bash and proc.args contains "/dev/tcp") or
+      (proc.name in (python, python3) and proc.cmdline contains "socket")
+    )
+  output: >
+    Reverse shell attempt detected
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [attack, reverse_shell]
+
+- rule: Suspicious Network Tool Usage
+  desc: Détecte l'utilisation d'outils réseau suspects
+  condition: >
+    spawned_process and container and
+    proc.name in (nmap, masscan, tcpdump, wireshark, tshark)
+  output: >
+    Suspicious network tool executed
+    (user=%user.name tool=%proc.name args=%proc.args container=%container.name)
+  priority: WARNING
+  tags: [network, reconnaissance]
+
+- rule: Kubernetes Secret Access
+  desc: Détecte l'accès aux secrets Kubernetes
+  condition: >
+    open_read and container and
+    fd.name glob "/run/secrets/kubernetes.io/*" and
+    not proc.name in (kubelet, kube-proxy)
+  output: >
+    Kubernetes secret accessed
+    (user=%user.name process=%proc.name file=%fd.name container=%container.name)
+  priority: NOTICE
+  tags: [kubernetes, secrets]
+
+- rule: Container Privilege Escalation
+  desc: Détecte les tentatives d'escalade de privilèges
+  condition: >
+    spawned_process and container and (
+      proc.name in (sudo, su) or
+      (proc.name = chmod and proc.args contains "+s") or
+      (proc.name in (chown, chgrp) and proc.args contains "root")
+    )
+  output: >
+    Privilege escalation attempt in container
+    (user=%user.name command=%proc.cmdline container=%container.name)
+  priority: WARNING
+  tags: [privilege_escalation]
+
+- rule: Sensitive File Access
+  desc: Détecte l'accès à des fichiers sensibles
+  condition: >
+    open_read and container and (
+      fd.name in (/etc/shadow, /etc/sudoers, /root/.ssh/id_rsa) or
+      fd.directory in (/root/.ssh, /home/*/.ssh)
+    )
+  output: >
+    Sensitive file accessed
+    (user=%user.name file=%fd.name process=%proc.name container=%container.name)
+  priority: WARNING
+  tags: [filesystem, credentials]
+
+- rule: Package Manager in Container
+  desc: Détecte l'exécution de package managers (immutable containers)
+  condition: >
+    spawned_process and container and
+    proc.name in (apt, apt-get, yum, dnf, apk, pip, npm)
+  output: >
+    Package manager executed in running container
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: NOTICE
+  tags: [container, immutability]
+
+- rule: Kubernetes API Server Access
+  desc: Détecte les connexions non autorisées au API server
+  condition: >
+    outbound and container and
+    fd.sip = "10.96.0.1" and fd.sport = 443 and
+    not container.image.repository in (kubectl, helm, terraform)
+  output: >
+    Unauthorized Kubernetes API access
+    (user=%user.name process=%proc.name container=%container.name dest=%fd.rip:%fd.rport)
+  priority: WARNING
+  tags: [kubernetes, api]
+
+- rule: Container Drift Detection
+  desc: Détecte les modifications de fichiers binaires (drift)
+  condition: >
+    modify and container and
+    fd.directory in (/bin, /sbin, /usr/bin, /usr/sbin)
+  output: >
+    Binary modified in container (container drift)
+    (user=%user.name file=%fd.name process=%proc.name container=%container.name)
+  priority: ERROR
+  tags: [container, drift]

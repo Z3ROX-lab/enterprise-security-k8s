@@ -1,0 +1,102 @@
+---
+# Security Automation (SOAR) - Playbooks de réponse automatique
+- name: Créer namespace pour automation
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: security-automation
+        labels:
+          security-tier: soar
+
+- name: Déployer ConfigMap avec playbooks de réponse
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: incident-response-playbooks
+        namespace: security-automation
+      data:
+        isolate-pod.sh: |
+          #!/bin/bash
+          # Playbook: Isoler un pod suspect
+          POD_NAME=$1
+          NAMESPACE=$2
+
+          echo "🔒 Isolation du pod $POD_NAME dans namespace $NAMESPACE"
+
+          # Créer NetworkPolicy deny-all pour ce pod
+          kubectl apply -f - <<EOF
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: isolate-$POD_NAME
+            namespace: $NAMESPACE
+          spec:
+            podSelector:
+              matchLabels:
+                pod-name: $POD_NAME
+            policyTypes:
+              - Ingress
+              - Egress
+          EOF
+
+          # Logger l'incident
+          echo "$(date) - Pod $POD_NAME isolated" >> /var/log/security-incidents.log
+
+        rotate-secrets.sh: |
+          #!/bin/bash
+          # Playbook: Rotation d'urgence des secrets
+          NAMESPACE=$1
+
+          echo "🔑 Rotation des secrets pour namespace $NAMESPACE"
+
+          # Rotation via Vault
+          kubectl exec -n security-iam vault-0 -- vault write -f /sys/leases/revoke-prefix/database/creds
+
+          # Redémarrage des pods pour pickup nouveaux secrets
+          kubectl rollout restart deployment -n $NAMESPACE
+
+        create-incident-ticket.sh: |
+          #!/bin/bash
+          # Playbook: Créer un ticket d'incident
+          SEVERITY=$1
+          MESSAGE=$2
+
+          echo "📋 Création ticket incident - Severity: $SEVERITY"
+          echo "$MESSAGE" | kubectl create configmap incident-$(date +%s) \
+            --from-literal=severity=$SEVERITY \
+            --from-literal=message="$MESSAGE" \
+            --from-literal=timestamp=$(date -Iseconds) \
+            -n security-automation
+
+- name: Créer CronJob pour scan de sécurité régulier
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: security-scan-hourly
+        namespace: security-automation
+      spec:
+        schedule: "0 * * * *"  # Chaque heure
+        jobTemplate:
+          spec:
+            template:
+              spec:
+                serviceAccountName: security-scanner
+                containers:
+                  - name: trivy-scan
+                    image: aquasec/trivy:latest
+                    command:
+                      - trivy
+                      - k8s
+                      - --report
+                      - summary
+                      - cluster
+                restartPolicy: OnFailure

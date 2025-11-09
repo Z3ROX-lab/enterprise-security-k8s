@@ -131,40 +131,55 @@ graph TB
 ## 🚀 Démarrage Rapide
 
 ### Prérequis
-- Kubernetes 1.28+ ou OpenShift 4.14+
-- kubectl / oc
-- Helm 3.x
-- Terraform 1.6+
-- Ansible 2.15+
+- **Windows 11** avec Docker Desktop + WSL2 Ubuntu 22.04
+- **OU** Linux avec Docker + kubectl + Helm + Terraform + Kind
+- **Ressources minimales** : 4 CPU cores, 8 GB RAM, 20 GB disk
 
-### Déploiement Complet (30 min)
+### Option 1 : Déploiement Automatique Complet (30-40 min)
 
 ```bash
 # 1. Clone du repo
-git clone https://github.com/r3rox/enterprise-security-k8s.git
+git clone https://github.com/Z3ROX-lab/enterprise-security-k8s.git
 cd enterprise-security-k8s
 
-# 2. Infrastructure avec Terraform (si cloud)
-cd terraform
-terraform init
-terraform apply -auto-approve
+# 2. Déploiement complet (Infrastructure + Security + Monitoring)
+./scripts/deploy-all.sh
 
-# 3. Configuration de base avec Ansible
-cd ../ansible
-ansible-playbook -i inventory/prod site.yml
+# 3. Accès aux interfaces (dans des terminaux séparés)
+# Grafana
+kubectl port-forward -n security-siem svc/prometheus-grafana 3000:80
 
-# 4. Déploiement des stacks avec Helm
-cd ../helm-charts
-./deploy-all.sh
+# Kibana
+kubectl port-forward -n security-siem svc/kibana-kibana 5601:5601
 
-# 5. Vérification
-kubectl get pods -n security-stack
+# Keycloak
+kubectl port-forward -n security-iam svc/keycloak 8080:80
+
+# Vault
+kubectl port-forward -n security-iam svc/vault 8200:8200
 ```
 
-### Demo Rapide avec Minikube (10 min)
+### Option 2 : Déploiement Manuel (Contrôle Étape par Étape)
 
 ```bash
-# Démo sur cluster local
+# 1. Infrastructure avec Terraform (Kind cluster)
+cd terraform
+terraform init
+terraform apply
+
+# 2. Configuration et hardening avec Ansible
+cd ../ansible
+ansible-playbook playbooks/site.yml
+
+# 3. Vérification
+kubectl get pods --all-namespaces
+kubectl get networkpolicies --all-namespaces
+```
+
+### Demo Rapide Minikube (10 min)
+
+```bash
+# Démo légère sur Minikube (si Terraform/Kind non disponibles)
 cd demo
 ./quick-start-minikube.sh
 
@@ -172,15 +187,14 @@ cd demo
 # - Keycloak: http://localhost:8080
 # - Kibana: http://localhost:5601
 # - Grafana: http://localhost:3000
-# - Wazuh: http://localhost:8443
 ```
 
 ## 📖 Documentation Détaillée
 
-- [Architecture Technique](docs/architecture.md) - Détails d'implémentation
-- [Guide des Équivalences](docs/equivalences.md) - Mapping détaillé OSS ↔ Commercial
-- [Conformité & Standards](docs/compliance.md) - CIS, ANSSI, NIS2, ISO 27001
-- [Pitch Entretien](docs/pitch-entretien-architecte-cyber.md) - One-pager pour entretiens
+- **[Architecture Technique](docs/architecture.md)** - Architecture complète, flux de données, composants détaillés
+- **[Guide des Équivalences](docs/equivalences.md)** - Mapping détaillé OSS ↔ Commercial (9 catégories)
+- **[Guide Windows 11](docs/WINDOWS11-SETUP.md)** - Installation complète sur Windows 11 + WSL2
+- **[Pitch Entretien](docs/pitch-entretien-architecte-cyber.md)** - One-pager pour entretiens d'architecte cyber
 
 ## 🎓 Cas d'Études Réels
 
@@ -225,9 +239,10 @@ Les contributions sont bienvenues ! Voir [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📬 Contact
 
-**[Z3ROX]** - Architecte Cloud & Cybersécurité
-- LinkedIn: [https://github.com/Z3ROX-lab]
-- Email: []
+**Z3ROX** - Architecte Cloud & Cybersécurité
+- GitHub: https://github.com/Z3ROX-lab
+- LinkedIn: [Votre profil LinkedIn]
+- Email: [Votre email]
 - Certifications: CCSP, AWS SA, ISO 27001 Lead Implementer, Security+
 
 ## 📄 Licence
