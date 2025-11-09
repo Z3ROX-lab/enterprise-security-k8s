@@ -16,3 +16,9 @@ variable "prometheus_retention" {
   type        = string
   default     = "7d"
 }
+
+variable "enable_kibana" {
+  description = "Activer Kibana (désactivé par défaut car Wazuh fournit son propre dashboard)"
+  type        = bool
+  default     = false
+}

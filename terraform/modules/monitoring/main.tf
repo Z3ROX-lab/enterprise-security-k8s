@@ -67,8 +67,10 @@ resource "helm_release" "elasticsearch" {
   timeout = 600
 }
 
-# ELK Stack - Kibana
+# ELK Stack - Kibana (optionnel, désactivé par défaut)
+# Note: Wazuh fournit son propre dashboard basé sur Kibana
 resource "helm_release" "kibana" {
+  count      = var.enable_kibana ? 1 : 0
   name       = "kibana"
   repository = "https://helm.elastic.co"
   chart      = "kibana"
