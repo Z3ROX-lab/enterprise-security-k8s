@@ -1,0 +1,104 @@
+---
+# Network Policies - Micro-segmentation et Zero Trust
+- name: Appliquer default-deny-all sur tous les namespaces de sécurité
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: default-deny-all
+        namespace: "{{ item }}"
+      spec:
+        podSelector: {}
+        policyTypes:
+          - Ingress
+          - Egress
+  loop:
+    - security-iam
+    - security-siem
+    - security-detection
+    - demo-app
+
+- name: Autoriser DNS pour tous les pods
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-dns
+        namespace: "{{ item }}"
+      spec:
+        podSelector: {}
+        policyTypes:
+          - Egress
+        egress:
+          - to:
+              - namespaceSelector:
+                  matchLabels:
+                    kubernetes.io/metadata.name: kube-system
+            ports:
+              - protocol: UDP
+                port: 53
+  loop:
+    - security-iam
+    - security-siem
+    - security-detection
+    - demo-app
+
+- name: Autoriser communication IAM vers SIEM (logs)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-logs-to-elasticsearch
+        namespace: security-iam
+      spec:
+        podSelector: {}
+        policyTypes:
+          - Egress
+        egress:
+          - to:
+              - namespaceSelector:
+                  matchLabels:
+                    security-tier: logging
+              - podSelector:
+                  matchLabels:
+                    app: elasticsearch-master
+            ports:
+              - protocol: TCP
+                port: 9200
+
+- name: Autoriser Prometheus scraping
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-prometheus-scraping
+        namespace: "{{ item }}"
+      spec:
+        podSelector: {}
+        policyTypes:
+          - Ingress
+        ingress:
+          - from:
+              - namespaceSelector:
+                  matchLabels:
+                    security-tier: logging
+              - podSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: prometheus
+            ports:
+              - protocol: TCP
+                port: 9090
+              - protocol: TCP
+                port: 8080
+  loop:
+    - security-iam
+    - security-detection
+    - demo-app

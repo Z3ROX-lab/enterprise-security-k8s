@@ -1,0 +1,67 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "security-overview",
+    "title": "Security Stack Overview",
+    "tags": ["security", "kubernetes"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 0,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "NetworkPolicy Violations",
+        "targets": [
+          {
+            "expr": "sum(rate(calico_denied_packets[5m])) by (namespace)",
+            "legendFormat": "{{namespace}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "Falco Alerts",
+        "targets": [
+          {
+            "expr": "sum(rate(falco_events[5m])) by (priority)",
+            "legendFormat": "{{priority}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "stat",
+        "title": "Total Pods",
+        "targets": [
+          {
+            "expr": "count(kube_pod_info)"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "type": "stat",
+        "title": "Security Incidents (24h)",
+        "targets": [
+          {
+            "expr": "sum(increase(falco_events{priority=\"Critical\"}[24h]))"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["10s", "30s", "1m", "5m"]
+    }
+  }
+}

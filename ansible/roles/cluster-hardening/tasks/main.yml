@@ -1,0 +1,83 @@
+---
+# Cluster Hardening - Sécurisation du cluster Kubernetes
+- name: Appliquer Pod Security Standards
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item.name }}"
+        labels:
+          pod-security.kubernetes.io/enforce: "{{ item.pss_level }}"
+          pod-security.kubernetes.io/audit: "{{ item.pss_level }}"
+          pod-security.kubernetes.io/warn: "{{ item.pss_level }}"
+  loop:
+    - { name: "security-iam", pss_level: "restricted" }
+    - { name: "security-siem", pss_level: "baseline" }
+    - { name: "security-detection", pss_level: "privileged" }
+    - { name: "demo-app", pss_level: "restricted" }
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Créer ResourceQuotas pour chaque namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata:
+        name: compute-resources
+        namespace: "{{ item }}"
+      spec:
+        hard:
+          requests.cpu: "4"
+          requests.memory: 8Gi
+          limits.cpu: "8"
+          limits.memory: 16Gi
+          pods: "20"
+  loop:
+    - security-iam
+    - security-siem
+    - security-detection
+    - demo-app
+
+- name: Créer LimitRanges par défaut
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: LimitRange
+      metadata:
+        name: default-limits
+        namespace: "{{ item }}"
+      spec:
+        limits:
+          - default:
+              cpu: 500m
+              memory: 512Mi
+            defaultRequest:
+              cpu: 100m
+              memory: 128Mi
+            type: Container
+  loop:
+    - security-iam
+    - security-siem
+    - security-detection
+    - demo-app
+
+- name: Désactiver ServiceAccount auto-mount par défaut
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: default
+        namespace: "{{ item }}"
+      automountServiceAccountToken: false
+  loop:
+    - security-iam
+    - security-siem
+    - security-detection
+    - demo-app

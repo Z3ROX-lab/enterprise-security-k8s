@@ -1,0 +1,36 @@
+---
+# Vérification des prérequis pour le déploiement
+- name: Vérifier que Docker est installé et fonctionne
+  command: docker info
+  register: docker_info
+  changed_when: false
+  failed_when: docker_info.rc != 0
+
+- name: Vérifier que kubectl est installé
+  command: kubectl version --client
+  register: kubectl_version
+  changed_when: false
+  failed_when: kubectl_version.rc != 0
+
+- name: Vérifier que helm est installé
+  command: helm version
+  register: helm_version
+  changed_when: false
+  failed_when: helm_version.rc != 0
+
+- name: Afficher les versions des outils
+  debug:
+    msg: |
+      ✓ Docker: OK
+      ✓ kubectl: {{ kubectl_version.stdout_lines[0] }}
+      ✓ Helm: {{ helm_version.stdout_lines[0] }}
+
+- name: Vérifier la connexion au cluster Kubernetes
+  command: kubectl cluster-info
+  register: cluster_info
+  changed_when: false
+  failed_when: cluster_info.rc != 0
+
+- name: Afficher les informations du cluster
+  debug:
+    msg: "{{ cluster_info.stdout_lines }}"
