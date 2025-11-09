@@ -160,16 +160,18 @@ resource "helm_release" "cert_manager" {
 }
 
 # ClusterIssuer pour certificats auto-signés
-resource "kubernetes_manifest" "selfsigned_issuer" {
-  manifest = {
-    apiVersion = "cert-manager.io/v1"
-    kind       = "ClusterIssuer"
-    metadata = {
-      name = "selfsigned-issuer"
-    }
-    spec = {
-      selfSigned = {}
-    }
+resource "null_resource" "selfsigned_issuer" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      cat <<EOF | kubectl apply -f -
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: selfsigned-issuer
+      spec:
+        selfSigned: {}
+      EOF
+    EOT
   }
 
   depends_on = [helm_release.cert_manager]
@@ -277,48 +279,40 @@ resource "helm_release" "gatekeeper" {
 }
 
 # Constraint Templates OPA
-resource "kubernetes_manifest" "require_labels_template" {
-  manifest = {
-    apiVersion = "templates.gatekeeper.sh/v1"
-    kind       = "ConstraintTemplate"
-    metadata = {
-      name = "k8srequiredlabels"
-    }
-    spec = {
-      crd = {
-        spec = {
-          names = {
-            kind = "K8sRequiredLabels"
-          }
-          validation = {
-            openAPIV3Schema = {
-              type = "object"
-              properties = {
-                labels = {
-                  type = "array"
-                  items = {
-                    type = "string"
-                  }
-                }
+resource "null_resource" "require_labels_template" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      cat <<'YAML' | kubectl apply -f -
+      apiVersion: templates.gatekeeper.sh/v1
+      kind: ConstraintTemplate
+      metadata:
+        name: k8srequiredlabels
+      spec:
+        crd:
+          spec:
+            names:
+              kind: K8sRequiredLabels
+            validation:
+              openAPIV3Schema:
+                type: object
+                properties:
+                  labels:
+                    type: array
+                    items:
+                      type: string
+        targets:
+          - target: admission.k8s.gatekeeper.sh
+            rego: |
+              package k8srequiredlabels
+              violation[{"msg": msg, "details": {"missing_labels": missing}}] {
+                provided := {label | input.review.object.metadata.labels[label]}
+                required := {label | label := input.parameters.labels[_]}
+                missing := required - provided
+                count(missing) > 0
+                msg := sprintf("You must provide labels: %v", [missing])
               }
-            }
-          }
-        }
-      }
-      targets = [{
-        target = "admission.k8s.gatekeeper.sh"
-        rego = <<-EOF
-          package k8srequiredlabels
-          violation[{"msg": msg, "details": {"missing_labels": missing}}] {
-            provided := {label | input.review.object.metadata.labels[label]}
-            required := {label | label := input.parameters.labels[_]}
-            missing := required - provided
-            count(missing) > 0
-            msg := sprintf("You must provide labels: %v", [missing])
-          }
-        EOF
-      }]
-    }
+      YAML
+    EOT
   }
 
   depends_on = [helm_release.gatekeeper]
