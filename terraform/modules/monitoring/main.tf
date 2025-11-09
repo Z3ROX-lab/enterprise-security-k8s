@@ -105,13 +105,13 @@ resource "helm_release" "filebeat" {
   set {
     name  = "filebeatConfig.filebeat\\.yml"
     value = yamlencode({
-      filebeat.inputs = [{
+      "filebeat.inputs" = [{
         type = "container"
         paths = [
           "/var/log/containers/*.log"
         ]
       }]
-      output.elasticsearch = {
+      "output.elasticsearch" = {
         hosts = ["http://elasticsearch-master:9200"]
       }
     })
