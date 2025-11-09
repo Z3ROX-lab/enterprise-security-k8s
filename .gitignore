@@ -1,0 +1,31 @@
+﻿# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Secrets
+*.key
+*.pem
+secrets/
+*.env
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Ansible
+*.retry
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Logs
+*.log
