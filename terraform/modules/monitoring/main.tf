@@ -102,20 +102,20 @@ resource "helm_release" "filebeat" {
   namespace  = kubernetes_namespace.security_siem.metadata[0].name
   version    = "8.5.1"
 
-  set {
-    name  = "filebeatConfig.filebeat\\.yml"
-    value = yamlencode({
-      "filebeat.inputs" = [{
-        type = "container"
-        paths = [
-          "/var/log/containers/*.log"
-        ]
-      }]
-      "output.elasticsearch" = {
-        hosts = ["http://elasticsearch-master:9200"]
+  values = [
+    yamlencode({
+      filebeatConfig = {
+        "filebeat.yml" = <<-EOF
+          filebeat.inputs:
+          - type: container
+            paths:
+              - /var/log/containers/*.log
+          output.elasticsearch:
+            hosts: ["http://elasticsearch-master:9200"]
+        EOF
       }
     })
-  }
+  ]
 
   depends_on = [helm_release.elasticsearch]
 }
