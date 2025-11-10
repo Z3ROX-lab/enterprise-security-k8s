@@ -211,11 +211,8 @@ resource "helm_release" "falco" {
     value = var.elasticsearch_url
   }
 
-  # Rules personnalisées
-  set {
-    name  = "customRules.rules-custom\\.yaml"
-    value = file("${path.module}/falco-rules/custom-rules.yaml")
-  }
+  # Note: Custom rules can be added via ConfigMap after deployment
+  # See falco-rules/custom-rules.yaml for example rules
 
   timeout = 600
 }
@@ -223,33 +220,33 @@ resource "helm_release" "falco" {
 # ========================================
 # HOST INTRUSION DETECTION - WAZUH
 # ========================================
+#
+# Note: Wazuh n'a plus de chart Helm officiel public.
+# Utiliser le déploiement manuel avec leurs manifests Kubernetes :
+# https://documentation.wazuh.com/current/deployment-options/deploying-with-kubernetes/index.html
+#
+# Quick deploy command:
+# kubectl apply -k https://github.com/wazuh/wazuh-kubernetes/deployments/kubernetes/
+#
+# Pour activer via Terraform (expérimental), set enable_wazuh = true
 
-resource "helm_release" "wazuh" {
-  name       = "wazuh"
-  repository = "https://wazuh.github.io/wazuh-kubernetes"
-  chart      = "wazuh"
-  namespace  = kubernetes_namespace.security_detection.metadata[0].name
-  version    = "4.7.0"
+resource "null_resource" "wazuh_deployment" {
+  count = var.enable_wazuh ? 1 : 0
 
-  # Wazuh manager
-  set {
-    name  = "wazuh-manager.replicas"
-    value = "1"
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "Deploying Wazuh via Kustomize..."
+      kubectl create namespace ${kubernetes_namespace.security_detection.metadata[0].name} --dry-run=client -o yaml | kubectl apply -f -
+
+      # Note: This requires the Wazuh repository to be cloned or use kustomize remote
+      # kubectl apply -k https://github.com/wazuh/wazuh-kubernetes//deployments/kubernetes/
+
+      echo "Wazuh deployment requires manual configuration. Please follow:"
+      echo "https://documentation.wazuh.com/current/deployment-options/deploying-with-kubernetes/index.html"
+    EOT
   }
 
-  # Wazuh indexer (Elasticsearch fork)
-  set {
-    name  = "wazuh-indexer.replicas"
-    value = "1"
-  }
-
-  # Wazuh dashboard
-  set {
-    name  = "wazuh-dashboard.replicas"
-    value = "1"
-  }
-
-  timeout = 600
+  depends_on = [kubernetes_namespace.security_detection]
 }
 
 # ========================================

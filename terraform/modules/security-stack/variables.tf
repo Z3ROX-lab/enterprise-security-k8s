@@ -25,9 +25,9 @@ variable "elasticsearch_url" {
 }
 
 variable "enable_wazuh" {
-  description = "Déployer Wazuh HIDS"
+  description = "Déployer Wazuh HIDS (désactivé par défaut - utiliser déploiement manuel)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_falco" {
