@@ -222,27 +222,43 @@ resource "helm_release" "falco" {
 # ========================================
 #
 # Note: Wazuh n'a plus de chart Helm officiel public.
-# Utiliser le déploiement manuel avec leurs manifests Kubernetes :
+# Déploiement via Kustomize depuis le repository GitHub officiel.
 # https://documentation.wazuh.com/current/deployment-options/deploying-with-kubernetes/index.html
-#
-# Quick deploy command:
-# kubectl apply -k https://github.com/wazuh/wazuh-kubernetes/deployments/kubernetes/
-#
-# Pour activer via Terraform (expérimental), set enable_wazuh = true
 
 resource "null_resource" "wazuh_deployment" {
   count = var.enable_wazuh ? 1 : 0
 
   provisioner "local-exec" {
     command = <<-EOT
+      set -e
+      echo "======================================"
       echo "Deploying Wazuh via Kustomize..."
+      echo "======================================"
+
+      # Créer le namespace si nécessaire
       kubectl create namespace ${kubernetes_namespace.security_detection.metadata[0].name} --dry-run=client -o yaml | kubectl apply -f -
 
-      # Note: This requires the Wazuh repository to be cloned or use kustomize remote
-      # kubectl apply -k https://github.com/wazuh/wazuh-kubernetes//deployments/kubernetes/
+      # Déployer Wazuh avec Kustomize remote
+      echo "Applying Wazuh manifests from GitHub..."
+      kubectl apply -k https://github.com/wazuh/wazuh-kubernetes//deployments/kubernetes/ -n ${kubernetes_namespace.security_detection.metadata[0].name}
 
-      echo "Wazuh deployment requires manual configuration. Please follow:"
-      echo "https://documentation.wazuh.com/current/deployment-options/deploying-with-kubernetes/index.html"
+      echo ""
+      echo "======================================"
+      echo "Wazuh deployment initiated!"
+      echo "======================================"
+      echo ""
+      echo "Monitor deployment with:"
+      echo "  kubectl get pods -n ${kubernetes_namespace.security_detection.metadata[0].name} -w"
+      echo ""
+      echo "Wait for pods to be Ready (5-10 minutes):"
+      echo "  - wazuh-manager-master-0"
+      echo "  - wazuh-indexer-0"
+      echo "  - wazuh-dashboard-xxxxx"
+      echo ""
+      echo "Access dashboard:"
+      echo "  kubectl port-forward -n ${kubernetes_namespace.security_detection.metadata[0].name} svc/wazuh-dashboard 5443:443"
+      echo "  https://localhost:5443 (admin/SecretPassword)"
+      echo ""
     EOT
   }
 
