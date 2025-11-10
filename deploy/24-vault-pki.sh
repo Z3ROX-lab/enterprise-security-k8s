@@ -37,12 +37,40 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-# Récupérer le root token (mode DEV uniquement)
-ROOT_TOKEN="root"
-if kubectl exec -n security-iam vault-0 -- vault status | grep -q "Sealed.*true"; then
+# Récupérer le root token selon le mode (DEV ou PROD)
+echo "🔍 Détection du mode Vault..."
+if kubectl exec -n security-iam vault-0 -- env | grep -q "VAULT_DEV_ROOT_TOKEN_ID"; then
+    echo "  Mode: DEV"
+    ROOT_TOKEN="root"
+else
+    echo "  Mode: PRODUCTION (Raft)"
+    # Récupérer le root token depuis le secret Kubernetes
+    if kubectl get secret -n security-iam vault-unseal-keys &>/dev/null; then
+        ROOT_TOKEN=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.vault-root}' | base64 -d)
+        echo "  ✅ Root token récupéré"
+    elif kubectl get secret -n security-iam vault-init &>/dev/null; then
+        ROOT_TOKEN=$(kubectl get secret -n security-iam vault-init -o jsonpath='{.data.root-token}' | base64 -d)
+        echo "  ✅ Root token récupéré"
+    else
+        echo "❌ Impossible de trouver le root token"
+        echo ""
+        echo "Pour Vault Raft (production), le root token devrait être dans un secret."
+        echo "Vérifiez avec : kubectl get secrets -n security-iam | grep vault"
+        echo ""
+        echo "Si Vault vient d'être déployé, initialisez-le :"
+        echo "  kubectl exec -n security-iam vault-0 -- vault operator init"
+        exit 1
+    fi
+fi
+
+# Vérifier que Vault n'est pas sealed
+if kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault status 2>/dev/null | grep -q "Sealed.*true"; then
     echo "❌ Vault est sealed. Unseal-le d'abord."
+    echo "   kubectl exec -n security-iam vault-0 -- vault operator unseal"
     exit 1
 fi
+
+echo "  ✅ Vault accessible et unsealed"
 
 echo ""
 echo "🔧 Configuration du PKI Engine..."
