@@ -89,9 +89,9 @@ resource "helm_release" "keycloak" {
   }
 
   # Timeout augmenté car PostgreSQL + Keycloak peuvent être lents
+  # wait=false pour permettre à Terraform de continuer même si démarrage lent
   timeout = 1200
-  wait    = true
-  wait_for_jobs = true
+  wait    = false
 }
 
 # ========================================
@@ -134,8 +134,9 @@ resource "helm_release" "vault" {
   }
 
   # Timeout augmenté pour le démarrage de Vault
+  # wait=false pour permettre à Terraform de continuer
   timeout = 1200
-  wait    = true
+  wait    = false
 }
 
 # ========================================
@@ -220,8 +221,9 @@ resource "helm_release" "falco" {
   # See falco-rules/custom-rules.yaml for example rules
 
   # Timeout augmenté car eBPF driver peut prendre du temps
+  # wait=false pour permettre à Terraform de continuer
   timeout = 1200
-  wait    = true
+  wait    = false
 }
 
 # ========================================
