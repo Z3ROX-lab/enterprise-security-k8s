@@ -11,37 +11,28 @@ echo ""
 # Créer le namespace
 kubectl create namespace security-iam --dry-run=client -o yaml | kubectl apply -f -
 
-# Ajouter le repo Helm
+# Ajouter le repo Helm officiel Keycloak
 echo "📦 Configuration du repository Helm..."
-helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add codecentric https://codecentric.github.io/helm-charts
 helm repo update
 
 # Déployer Keycloak (avec PostgreSQL intégré)
 echo ""
 echo "🔑 Déploiement de Keycloak + PostgreSQL..."
-echo "   Note: Utilisation d'images récentes et disponibles"
-helm upgrade --install keycloak bitnami/keycloak \
+echo "   Note: Utilisation du chart officiel Keycloak (codecentric)"
+helm upgrade --install keycloak codecentric/keycloak \
   --namespace security-iam \
-  --version 17.3.6 \
-  --set image.registry=quay.io \
-  --set image.repository=keycloak/keycloak \
-  --set image.tag=24.0.1 \
-  --set auth.adminUser=admin \
-  --set auth.adminPassword=admin123 \
+  --set keycloak.username=admin \
+  --set keycloak.password=admin123 \
   --set postgresql.enabled=true \
-  --set postgresql.image.registry=docker.io \
-  --set postgresql.image.repository=bitnami/postgresql \
-  --set postgresql.image.tag=16.1.0-debian-11-r15 \
-  --set postgresql.auth.password=postgres123 \
-  --set production=false \
-  --set proxy=edge \
+  --set postgresql.postgresqlPassword=postgres123 \
   --timeout 15m \
   --wait=false
 
 echo ""
 echo "⏳ Attente que PostgreSQL démarre (5 min)..."
 for i in {1..10}; do
-    if kubectl get pod -n security-iam -l app.kubernetes.io/component=postgresql --no-headers 2>/dev/null | grep -q "Running"; then
+    if kubectl get pod -n security-iam -l app=postgresql --no-headers 2>/dev/null | grep -q "Running"; then
         echo "✅ PostgreSQL est Running !"
         break
     fi
@@ -52,7 +43,7 @@ done
 echo ""
 echo "⏳ Attente que Keycloak démarre (10 min)..."
 for i in {1..20}; do
-    if kubectl get pod -n security-iam -l app.kubernetes.io/component=keycloak --no-headers 2>/dev/null | grep -q "Running"; then
+    if kubectl get pod -n security-iam -l app.kubernetes.io/name=keycloak --no-headers 2>/dev/null | grep -q "Running"; then
         echo "✅ Keycloak est Running !"
         break
     fi
