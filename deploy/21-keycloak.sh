@@ -19,7 +19,7 @@ helm repo update
 # Déployer Keycloak (avec PostgreSQL intégré)
 echo ""
 echo "🔑 Déploiement de Keycloak + PostgreSQL..."
-echo "   Note: Utilisation des images officielles Keycloak (quay.io)"
+echo "   Note: Utilisation d'images récentes et disponibles"
 helm upgrade --install keycloak bitnami/keycloak \
   --namespace security-iam \
   --version 17.3.6 \
@@ -29,6 +29,9 @@ helm upgrade --install keycloak bitnami/keycloak \
   --set auth.adminUser=admin \
   --set auth.adminPassword=admin123 \
   --set postgresql.enabled=true \
+  --set postgresql.image.registry=docker.io \
+  --set postgresql.image.repository=bitnami/postgresql \
+  --set postgresql.image.tag=16.1.0-debian-11-r15 \
   --set postgresql.auth.password=postgres123 \
   --set production=false \
   --set proxy=edge \
