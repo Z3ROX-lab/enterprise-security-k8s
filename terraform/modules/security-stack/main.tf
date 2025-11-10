@@ -194,10 +194,15 @@ resource "helm_release" "falco" {
   namespace  = kubernetes_namespace.security_detection.metadata[0].name
   version    = "4.0.0"
 
-  # eBPF driver (mieux que kernel module)
+  # Kernel module pour WSL2/Kind (eBPF ne fonctionne pas bien sur WSL2)
   set {
     name  = "driver.kind"
-    value = "ebpf"
+    value = "module"
+  }
+
+  set {
+    name  = "driver.loader.initContainer.enabled"
+    value = "true"
   }
 
   # Falcosidekick pour export logs
