@@ -9,7 +9,7 @@ echo "╚═══════════════════════�
 echo ""
 
 # Vérifier qu'Elasticsearch existe
-if ! kubectl get deployment elasticsearch-master -n security-siem &>/dev/null; then
+if ! kubectl get statefulset elasticsearch-master -n security-siem &>/dev/null; then
     echo "❌ Elasticsearch non trouvé"
     echo "Lancez d'abord : ./10-elasticsearch.sh"
     exit 1
