@@ -88,7 +88,10 @@ resource "helm_release" "keycloak" {
     value = "edge"
   }
 
-  timeout = 600
+  # Timeout augmenté car PostgreSQL + Keycloak peuvent être lents
+  timeout = 1200
+  wait    = true
+  wait_for_jobs = true
 }
 
 # ========================================
@@ -130,7 +133,9 @@ resource "helm_release" "vault" {
     value = "true"
   }
 
-  timeout = 600
+  # Timeout augmenté pour le démarrage de Vault
+  timeout = 1200
+  wait    = true
 }
 
 # ========================================
@@ -214,7 +219,9 @@ resource "helm_release" "falco" {
   # Note: Custom rules can be added via ConfigMap after deployment
   # See falco-rules/custom-rules.yaml for example rules
 
-  timeout = 600
+  # Timeout augmenté car eBPF driver peut prendre du temps
+  timeout = 1200
+  wait    = true
 }
 
 # ========================================
@@ -238,9 +245,19 @@ resource "null_resource" "wazuh_deployment" {
       # Créer le namespace si nécessaire
       kubectl create namespace ${kubernetes_namespace.security_detection.metadata[0].name} --dry-run=client -o yaml | kubectl apply -f -
 
-      # Déployer Wazuh avec Kustomize remote
-      echo "Applying Wazuh manifests from GitHub..."
-      kubectl apply -k https://github.com/wazuh/wazuh-kubernetes//deployments/kubernetes/ -n ${kubernetes_namespace.security_detection.metadata[0].name}
+      # Cloner le repo Wazuh si nécessaire
+      WAZUH_REPO="/tmp/wazuh-kubernetes"
+      if [ ! -d "$WAZUH_REPO" ]; then
+        echo "Cloning Wazuh Kubernetes repository..."
+        git clone --depth 1 https://github.com/wazuh/wazuh-kubernetes.git $WAZUH_REPO
+      else
+        echo "Updating Wazuh Kubernetes repository..."
+        cd $WAZUH_REPO && git pull
+      fi
+
+      # Déployer Wazuh avec Kustomize local
+      echo "Applying Wazuh manifests..."
+      kubectl apply -k $WAZUH_REPO/deployments/kubernetes/ -n ${kubernetes_namespace.security_detection.metadata[0].name}
 
       echo ""
       echo "======================================"
