@@ -50,33 +50,33 @@ echo "🔧 Configuration du PKI Engine..."
 # Activer le PKI engine
 echo ""
 echo "1️⃣  Activation du PKI engine (root)..."
-kubectl exec -n security-iam vault-0 -- vault secrets enable -path=pki pki || echo "  Déjà activé"
-kubectl exec -n security-iam vault-0 -- vault secrets tune -max-lease-ttl=87600h pki
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault secrets enable -path=pki pki || echo "  Déjà activé"
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault secrets tune -max-lease-ttl=87600h pki
 
 # Générer le Root CA
 echo ""
 echo "2️⃣  Génération du Root CA..."
-kubectl exec -n security-iam vault-0 -- vault write -field=certificate pki/root/generate/internal \
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write -field=certificate pki/root/generate/internal \
     common_name="Enterprise Security Root CA" \
     ttl=87600h > /tmp/root_ca.crt 2>/dev/null || echo "  Root CA déjà existant"
 
 # Configurer les URLs du CA
 echo ""
 echo "3️⃣  Configuration des URLs du CA..."
-kubectl exec -n security-iam vault-0 -- vault write pki/config/urls \
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write pki/config/urls \
     issuing_certificates="http://vault.security-iam:8200/v1/pki/ca" \
     crl_distribution_points="http://vault.security-iam:8200/v1/pki/crl"
 
 # Activer le PKI Intermediate
 echo ""
 echo "4️⃣  Activation du PKI Intermediate..."
-kubectl exec -n security-iam vault-0 -- vault secrets enable -path=pki_int pki || echo "  Déjà activé"
-kubectl exec -n security-iam vault-0 -- vault secrets tune -max-lease-ttl=43800h pki_int
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault secrets enable -path=pki_int pki || echo "  Déjà activé"
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault secrets tune -max-lease-ttl=43800h pki_int
 
 # Générer le CSR Intermediate
 echo ""
 echo "5️⃣  Génération du Intermediate CA CSR..."
-kubectl exec -n security-iam vault-0 -- vault write -format=json pki_int/intermediate/generate/internal \
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write -format=json pki_int/intermediate/generate/internal \
     common_name="Enterprise Security Intermediate CA" \
     | jq -r '.data.csr' > /tmp/pki_intermediate.csr 2>/dev/null || echo "  CSR déjà existant"
 
@@ -84,19 +84,19 @@ kubectl exec -n security-iam vault-0 -- vault write -format=json pki_int/interme
 echo ""
 echo "6️⃣  Signature du Intermediate CA..."
 if [ -f /tmp/pki_intermediate.csr ]; then
-    kubectl exec -n security-iam vault-0 -- vault write -format=json pki/root/sign-intermediate \
+    kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write -format=json pki/root/sign-intermediate \
         csr=@/tmp/pki_intermediate.csr \
         format=pem_bundle ttl="43800h" \
         | jq -r '.data.certificate' > /tmp/intermediate.cert.pem
 
     # Importer le certificat signé
-    cat /tmp/intermediate.cert.pem | kubectl exec -i -n security-iam vault-0 -- vault write pki_int/intermediate/set-signed certificate=-
+    cat /tmp/intermediate.cert.pem | kubectl exec -i -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write pki_int/intermediate/set-signed certificate=-
 fi
 
 # Créer un rôle pour cert-manager
 echo ""
 echo "7️⃣  Création d'un rôle pour cert-manager..."
-kubectl exec -n security-iam vault-0 -- vault write pki_int/roles/cert-manager \
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write pki_int/roles/cert-manager \
     allowed_domains="example.com,security-iam.svc.cluster.local" \
     allow_subdomains=true \
     max_ttl="720h"
@@ -104,7 +104,7 @@ kubectl exec -n security-iam vault-0 -- vault write pki_int/roles/cert-manager \
 # Créer une policy pour cert-manager
 echo ""
 echo "8️⃣  Création de la policy..."
-kubectl exec -n security-iam vault-0 -- vault policy write cert-manager - <<EOF
+kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault policy write cert-manager - <<EOF
 path "pki_int/sign/cert-manager" {
   capabilities = ["create", "update"]
 }
