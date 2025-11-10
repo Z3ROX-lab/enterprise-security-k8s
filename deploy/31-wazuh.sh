@@ -20,6 +20,13 @@ echo "📊 Ressources disponibles :"
 free -h | grep "Mem:"
 echo ""
 
+# Vérifier que le cluster existe
+if ! kubectl cluster-info &>/dev/null; then
+    echo "❌ Cluster non trouvé"
+    echo "Lancez d'abord : ./01-cluster-kind.sh"
+    exit 1
+fi
+
 read -p "Voulez-vous installer Wazuh ? (yes/no) " -r
 echo
 if [[ ! $REPLY =~ ^yes$ ]]; then
@@ -91,4 +98,7 @@ echo "  https://localhost:5443 (admin/SecretPassword)"
 echo ""
 echo "Vérifier les agents :"
 echo "  kubectl exec -n security-detection wazuh-manager-master-0 -- /var/ossec/bin/agent_control -l"
+echo ""
+echo "Prochaine étape :"
+echo "  ./40-gatekeeper.sh"
 echo ""
