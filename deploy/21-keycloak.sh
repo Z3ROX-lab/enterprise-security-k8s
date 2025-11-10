@@ -18,10 +18,9 @@ helm repo update
 
 # Déployer Keycloak (avec PostgreSQL intégré)
 echo ""
-echo "🔑 Déploiement de Keycloak 18.0.0 + PostgreSQL..."
+echo "🔑 Déploiement de Keycloak + PostgreSQL..."
 helm upgrade --install keycloak bitnami/keycloak \
   --namespace security-iam \
-  --version 18.0.0 \
   --set auth.adminUser=admin \
   --set auth.adminPassword=admin123 \
   --set postgresql.enabled=true \
