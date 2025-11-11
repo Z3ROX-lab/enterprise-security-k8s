@@ -181,15 +181,15 @@ kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write 
 # Créer une policy pour cert-manager
 echo ""
 echo "7️⃣  Création de la policy..."
-kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault policy write cert-manager - <<EOF
-path "pki_int/sign/cert-manager" {
+POLICY_CONTENT='path "pki_int/sign/cert-manager" {
   capabilities = ["create", "update"]
 }
 
 path "pki_int/issue/cert-manager" {
   capabilities = ["create"]
-}
-EOF
+}'
+
+echo "$POLICY_CONTENT" | kubectl exec -i -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault policy write cert-manager -
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════╗"
