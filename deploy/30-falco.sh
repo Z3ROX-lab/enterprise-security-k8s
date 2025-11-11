@@ -4,7 +4,7 @@ set -e
 
 echo "╔═══════════════════════════════════════════════════════════╗"
 echo "║              Falco Runtime Security                       ║"
-echo "║         (Kernel Module Driver pour WSL2)                 ║"
+echo "║            (eBPF Driver pour Kind/WSL2)                  ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -20,8 +20,8 @@ echo "  - Falco (runtime security)"
 echo "  - Falcosidekick (event forwarder)"
 echo "  - Falcosidekick UI (dashboard)"
 echo ""
-echo "⚠️  Note : Utilise le driver 'kernel module' (compatible WSL2)"
-echo "   Le driver eBPF ne fonctionne pas avec Kind/WSL2"
+echo "ℹ️  Note : Utilise le driver 'eBPF' (compatible Kind/WSL2)"
+echo "   Le kernel module ne fonctionne pas sur Kind"
 echo ""
 
 read -p "Continuer ? (y/n) " -n 1 -r
@@ -44,12 +44,12 @@ helm repo update
 
 # Déployer Falco
 echo ""
-echo "🛡️  Déploiement de Falco (5-10 minutes)..."
+echo "🛡️  Déploiement de Falco..."
 helm upgrade --install falco falcosecurity/falco \
   --namespace security-detection \
   --version 4.0.0 \
-  --set driver.kind=module \
-  --set driver.loader.initContainer.enabled=true \
+  --set driver.kind=ebpf \
+  --set driver.ebpf.hostNetwork=true \
   --set falcosidekick.enabled=true \
   --set falcosidekick.webui.enabled=true \
   --set falcosidekick.webui.redis.storageEnabled=false \
@@ -58,16 +58,16 @@ helm upgrade --install falco falcosecurity/falco \
   --set resources.limits.cpu=1000m \
   --set resources.limits.memory=1Gi \
   --set tty=true \
-  --timeout 15m \
+  --timeout 10m \
   --wait=false
 
 echo ""
 echo "⏳ Attente du démarrage des pods..."
-echo "   (Le chargement du kernel module peut prendre 5-10 minutes)"
+echo "   (Le chargement du driver eBPF est rapide)"
 echo ""
 
-for i in {1..40}; do
-    echo "─────── Check $i/40 (${i}0s) ───────"
+for i in {1..20}; do
+    echo "─────── Check $i/20 (${i}0s) ───────"
     kubectl get pods -n security-detection -l app.kubernetes.io/name=falco 2>/dev/null || echo "  Pas encore de pods"
 
     # Compter les pods Running
@@ -76,16 +76,17 @@ for i in {1..40}; do
 
     echo "  Running: $RUNNING/$TOTAL"
 
-    # Vérifier les erreurs d'init
-    INIT_ERRORS=$(kubectl get pods -n security-detection -l app.kubernetes.io/name=falco -o jsonpath='{.items[*].status.initContainerStatuses[*].state.waiting.reason}' 2>/dev/null | grep -i "error\|crash" || echo "")
-    if [ -n "$INIT_ERRORS" ]; then
-        echo "  ⚠️  Init container issues detected"
-        kubectl get pods -n security-detection -l app.kubernetes.io/name=falco
-        echo ""
-        echo "  Vérifier les logs :"
-        POD=$(kubectl get pods -n security-detection -l app.kubernetes.io/name=falco -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-        if [ -n "$POD" ]; then
-            echo "    kubectl logs $POD -n security-detection -c falco-driver-loader"
+    # Afficher les erreurs si elles existent
+    if [ "$TOTAL" -gt 0 ]; then
+        CRASHLOOP=$(kubectl get pods -n security-detection -l app.kubernetes.io/name=falco -o jsonpath='{.items[*].status.containerStatuses[*].state.waiting.reason}' 2>/dev/null | grep -i "crashloop" || echo "")
+        if [ -n "$CRASHLOOP" ]; then
+            echo "  ⚠️  Pods en CrashLoopBackOff"
+            echo ""
+            echo "  Vérifier les logs :"
+            POD=$(kubectl get pods -n security-detection -l app.kubernetes.io/name=falco -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            if [ -n "$POD" ]; then
+                echo "    kubectl logs $POD -n security-detection"
+            fi
         fi
     fi
     echo ""
@@ -95,8 +96,8 @@ for i in {1..40}; do
         break
     fi
 
-    if [ $i -lt 40 ]; then
-        sleep 15
+    if [ $i -lt 20 ]; then
+        sleep 10
     fi
 done
 
