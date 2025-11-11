@@ -191,9 +191,82 @@ path "pki_int/issue/cert-manager" {
 
 echo "$POLICY_CONTENT" | kubectl exec -i -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault policy write cert-manager -
 
+# Créer un token pour cert-manager avec la policy
+echo ""
+echo "8️⃣  Création d'un token pour cert-manager..."
+CERT_MANAGER_TOKEN=$(kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault token create -policy=cert-manager -format=json | jq -r '.auth.client_token')
+
+if [ -z "$CERT_MANAGER_TOKEN" ] || [ "$CERT_MANAGER_TOKEN" = "null" ]; then
+    echo "  ❌ Échec de la création du token"
+    exit 1
+fi
+
+echo "  ✅ Token créé"
+
+# Créer le secret Kubernetes avec le token
+echo ""
+echo "9️⃣  Création du secret Kubernetes pour cert-manager..."
+kubectl create secret generic vault-token -n cert-manager \
+    --from-literal=token="$CERT_MANAGER_TOKEN" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+echo "  ✅ Secret 'vault-token' créé dans cert-manager namespace"
+
+# Créer le ClusterIssuer
+echo ""
+echo "🔟 Création du ClusterIssuer Vault..."
+cat <<EOF | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-issuer
+spec:
+  vault:
+    server: http://vault.security-iam:8200
+    path: pki_int/sign/cert-manager
+    auth:
+      tokenSecretRef:
+        name: vault-token
+        key: token
+EOF
+
+echo "  ✅ ClusterIssuer 'vault-issuer' créé"
+
+# Créer un certificat de test
+echo ""
+echo "1️⃣1️⃣  Création d'un certificat de test..."
+cat <<EOF | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: test-vault-certificate
+  namespace: default
+spec:
+  secretName: test-vault-cert-tls
+  issuerRef:
+    name: vault-issuer
+    kind: ClusterIssuer
+  commonName: test.example.com
+  dnsNames:
+    - test.example.com
+    - "*.test.example.com"
+EOF
+
+echo "  ✅ Certificat de test créé"
+echo ""
+echo "  ⏳ Attente de l'émission du certificat (10 sec)..."
+sleep 10
+
+# Vérifier le certificat
+echo ""
+echo "📊 Vérification du certificat..."
+kubectl get certificate -n default test-vault-certificate
+echo ""
+kubectl describe certificate -n default test-vault-certificate | grep -A 5 "Status:"
+
 echo ""
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║           ✅ VAULT PKI CONFIGURÉ                          ║"
+echo "║       ✅ VAULT PKI + CERT-MANAGER CONFIGURÉS              ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 echo "Configuration terminée :"
@@ -201,25 +274,37 @@ echo "  ✅ Root CA créé"
 echo "  ✅ Intermediate CA créé et signé"
 echo "  ✅ Rôle cert-manager configuré"
 echo "  ✅ Policy créée"
+echo "  ✅ Token cert-manager créé"
+echo "  ✅ Secret Kubernetes créé"
+echo "  ✅ ClusterIssuer 'vault-issuer' déployé"
+echo "  ✅ Certificat de test créé"
 echo ""
-echo "Prochaines étapes :"
-echo "  - Créer un Issuer cert-manager qui utilise Vault"
-echo "  - Créer des Certificates avec cert-manager"
+echo "🎯 Utilisation :"
+echo "  Pour créer un certificat dans n'importe quel namespace :"
 echo ""
-echo "Exemple d'Issuer :"
 echo '  kubectl apply -f - <<EOF'
 echo '  apiVersion: cert-manager.io/v1'
-echo '  kind: Issuer'
+echo '  kind: Certificate'
 echo '  metadata:'
-echo '    name: vault-issuer'
-echo '    namespace: default'
+echo '    name: mon-certificat'
+echo '    namespace: mon-namespace'
 echo '  spec:'
-echo '    vault:'
-echo '      server: http://vault.security-iam:8200'
-echo '      path: pki_int/sign/cert-manager'
-echo '      auth:'
-echo '        tokenSecretRef:'
-echo '          name: vault-token'
-echo '          key: token'
+echo '    secretName: mon-cert-tls'
+echo '    issuerRef:'
+echo '      name: vault-issuer'
+echo '      kind: ClusterIssuer'
+echo '    commonName: mon-service.example.com'
+echo '    dnsNames:'
+echo '      - mon-service.example.com'
 echo '  EOF'
+echo ""
+echo "📋 Commandes utiles :"
+echo "  # Lister les certificats"
+echo "  kubectl get certificates --all-namespaces"
+echo ""
+echo "  # Voir les détails d'un certificat"
+echo "  kubectl describe certificate <name> -n <namespace>"
+echo ""
+echo "  # Voir le certificat de test"
+echo "  kubectl get secret test-vault-cert-tls -n default -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -text -noout"
 echo ""
