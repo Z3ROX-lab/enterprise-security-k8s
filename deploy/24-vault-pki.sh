@@ -9,6 +9,17 @@ echo "║          Intégration avec cert-manager                   ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
+# Vérifier que jq est installé
+if ! command -v jq &> /dev/null; then
+    echo "❌ jq n'est pas installé"
+    echo "   jq est requis pour parser le JSON de Vault"
+    echo ""
+    echo "Installation:"
+    echo "  sudo apt update && sudo apt install -y jq"
+    echo ""
+    exit 1
+fi
+
 # Vérifier que Vault existe
 if ! kubectl get pod -n security-iam vault-0 &>/dev/null; then
     echo "❌ Vault non trouvé"
