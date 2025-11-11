@@ -11,13 +11,24 @@ echo ""
 
 # Vérifier que jq est installé
 if ! command -v jq &> /dev/null; then
-    echo "❌ jq n'est pas installé"
-    echo "   jq est requis pour parser le JSON de Vault"
+    echo "⚠️  jq n'est pas installé (requis pour parser JSON)"
     echo ""
-    echo "Installation:"
-    echo "  sudo apt update && sudo apt install -y jq"
-    echo ""
-    exit 1
+    read -p "Installer jq automatiquement ? (yes/no) " -r
+    echo
+    if [[ $REPLY =~ ^yes$ ]]; then
+        echo "📦 Installation de jq..."
+        sudo apt update && sudo apt install -y jq
+        if command -v jq &> /dev/null; then
+            echo "✅ jq installé avec succès"
+        else
+            echo "❌ Échec de l'installation de jq"
+            exit 1
+        fi
+    else
+        echo "❌ Installation annulée"
+        echo "   Installez jq manuellement : sudo apt install -y jq"
+        exit 1
+    fi
 fi
 
 # Vérifier que Vault existe
