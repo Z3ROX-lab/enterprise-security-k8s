@@ -126,26 +126,53 @@ kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault secret
 # Générer le CSR Intermediate
 echo ""
 echo "5️⃣  Génération du Intermediate CA CSR..."
-kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write -format=json pki_int/intermediate/generate/internal \
-    common_name="Enterprise Security Intermediate CA" \
-    | jq -r '.data.csr' > /tmp/pki_intermediate.csr 2>/dev/null || echo "  CSR déjà existant"
 
-# Signer le CSR avec le Root CA
-echo ""
-echo "6️⃣  Signature du Intermediate CA..."
-if [ -f /tmp/pki_intermediate.csr ]; then
-    kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write -format=json pki/root/sign-intermediate \
-        csr=@/tmp/pki_intermediate.csr \
-        format=pem_bundle ttl="43800h" \
-        | jq -r '.data.certificate' > /tmp/intermediate.cert.pem
+# Vérifier si l'intermediate est déjà configuré
+if kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault read pki_int/cert/ca &>/dev/null; then
+    echo "  ✅ Intermediate CA déjà configuré"
+else
+    echo "  Génération du CSR..."
+    CSR_OUTPUT=$(kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write -format=json pki_int/intermediate/generate/internal \
+        common_name="Enterprise Security Intermediate CA" \
+        ttl=43800h)
+
+    echo "$CSR_OUTPUT" | jq -r '.data.csr' > /tmp/pki_intermediate.csr
+
+    if [ ! -s /tmp/pki_intermediate.csr ]; then
+        echo "  ❌ Échec de la génération du CSR"
+        echo "$CSR_OUTPUT"
+        exit 1
+    fi
+
+    echo "  ✅ CSR généré"
+
+    # Signer le CSR avec le Root CA
+    echo ""
+    echo "6️⃣  Signature du Intermediate CA..."
+    CERT_OUTPUT=$(kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write -format=json pki/root/sign-intermediate \
+        csr="$(cat /tmp/pki_intermediate.csr)" \
+        format=pem_bundle \
+        ttl="43800h")
+
+    echo "$CERT_OUTPUT" | jq -r '.data.certificate' > /tmp/intermediate.cert.pem
+
+    if [ ! -s /tmp/intermediate.cert.pem ]; then
+        echo "  ❌ Échec de la signature"
+        echo "$CERT_OUTPUT"
+        exit 1
+    fi
+
+    echo "  ✅ Certificat signé"
 
     # Importer le certificat signé
+    echo "  Import du certificat..."
     cat /tmp/intermediate.cert.pem | kubectl exec -i -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write pki_int/intermediate/set-signed certificate=-
+    echo "  ✅ Intermediate CA configuré"
 fi
 
 # Créer un rôle pour cert-manager
 echo ""
-echo "7️⃣  Création d'un rôle pour cert-manager..."
+echo "6️⃣  Création d'un rôle pour cert-manager..."
 kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write pki_int/roles/cert-manager \
     allowed_domains="example.com,security-iam.svc.cluster.local" \
     allow_subdomains=true \
@@ -153,7 +180,7 @@ kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault write 
 
 # Créer une policy pour cert-manager
 echo ""
-echo "8️⃣  Création de la policy..."
+echo "7️⃣  Création de la policy..."
 kubectl exec -n security-iam vault-0 -- env VAULT_TOKEN=$ROOT_TOKEN vault policy write cert-manager - <<EOF
 path "pki_int/sign/cert-manager" {
   capabilities = ["create", "update"]
