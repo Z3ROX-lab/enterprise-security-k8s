@@ -1,0 +1,428 @@
+# Checklist de Tests pour la Démo Finale
+
+## Vue d'ensemble
+Cette checklist contient tous les tests à effectuer pour démontrer le fonctionnement de la stack de sécurité Kubernetes.
+
+---
+
+## 1. Tests Trivy - Vulnérabilités
+
+### Test 1.1: Déploiement d'une image vulnérable
+**Objectif:** Vérifier que Trivy détecte les vulnérabilités et les exporte vers Elasticsearch/Kibana
+
+**Commandes:**
+```bash
+# Déployer une image vulnérable (Alpine 3.12)
+kubectl run vulnerable-test -n default --image=alpine:3.12 --command -- sleep 3600
+
+# Attendre 2-3 minutes pour le scan automatique
+sleep 180
+
+# Vérifier le rapport de vulnérabilités
+kubectl get vulnerabilityreports -n default | grep vulnerable-test
+
+# Voir le résumé des vulnérabilités
+kubectl get vulnerabilityreport -n default -l trivy-operator.resource.name=vulnerable-test -o jsonpath='{.items[0].report.summary}' | jq
+
+# Forcer l'export vers Elasticsearch
+kubectl create job -n trivy-system trivy-export-demo --from=cronjob/trivy-exporter
+
+# Attendre l'export (30 secondes)
+sleep 30
+
+# Vérifier les logs
+kubectl logs -n trivy-system job/trivy-export-demo
+```
+
+**Vérification dans Kibana:**
+1. Ouvrir Kibana: `kubectl port-forward -n security-siem svc/kibana-kibana 5601:5601`
+2. Aller dans Analytics → Discover
+3. Sélectionner le data view "Trivy Vulnerabilities"
+4. Chercher: `namespace: "default" AND report_name: *vulnerable-test*`
+5. Vérifier la présence de vulnérabilités CRITICAL et HIGH
+
+**Temps estimé:** 3-4 minutes
+
+**Cleanup:**
+```bash
+kubectl delete pod vulnerable-test -n default
+kubectl delete job trivy-export-demo -n trivy-system
+```
+
+---
+
+### Test 1.2: Vérification des dashboards Grafana
+**Objectif:** Visualiser les métriques Trivy dans Grafana
+
+**Commandes:**
+```bash
+# Port-forward Grafana
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+```
+
+**Vérification:**
+1. Ouvrir http://localhost:3000
+2. Login avec admin/prom-operator
+3. Chercher le dashboard Trivy
+4. Vérifier les métriques: nombre de vulnérabilités par sévérité, par namespace, etc.
+
+**Temps estimé:** 2 minutes
+
+---
+
+## 2. Tests Gatekeeper - Policy Enforcement
+
+### Test 2.1: Bloquer un pod sans labels requis
+**Objectif:** Vérifier que Gatekeeper bloque les déploiements non conformes
+
+**Commandes:**
+```bash
+# Tenter de créer un pod sans labels (devrait être bloqué)
+kubectl run test-no-labels --image=nginx
+
+# La commande devrait échouer avec un message de Gatekeeper
+```
+
+**Résultat attendu:** Rejet avec message explicatif
+
+**Temps estimé:** 1 minute
+
+---
+
+### Test 2.2: Bloquer une image non sécurisée
+**Objectif:** Vérifier que Gatekeeper bloque les images de registres non autorisés
+
+**Commandes:**
+```bash
+# Tenter d'utiliser une image non approuvée
+kubectl run test-bad-registry --image=docker.io/nginx
+
+# Devrait être bloqué si la policy de registre approuvé est active
+```
+
+**Résultat attendu:** Rejet ou acceptation selon les policies configurées
+
+**Temps estimé:** 1 minute
+
+---
+
+## 3. Tests Falco - Runtime Security
+
+### Test 3.1: Détection de shell interactif dans un conteneur
+**Objectif:** Vérifier que Falco détecte un shell interactif (comportement suspect)
+
+**Commandes:**
+```bash
+# Créer un pod de test
+kubectl run falco-test --image=nginx
+
+# Attendre que le pod démarre
+kubectl wait --for=condition=ready pod/falco-test --timeout=60s
+
+# Exécuter un shell interactif (comportement suspect)
+kubectl exec -it falco-test -- /bin/bash
+# Taper quelques commandes puis exit
+
+# Vérifier les logs Falco
+kubectl logs -n falco daemonset/falco | grep -i "shell"
+```
+
+**Résultat attendu:** Alerte Falco détectant le shell interactif
+
+**Temps estimé:** 2 minutes
+
+**Cleanup:**
+```bash
+kubectl delete pod falco-test
+```
+
+---
+
+### Test 3.2: Détection d'écriture dans /etc
+**Objectif:** Vérifier que Falco détecte les modifications suspectes dans /etc
+
+**Commandes:**
+```bash
+# Créer un pod
+kubectl run falco-test-etc --image=nginx
+
+# Modifier un fichier dans /etc (comportement suspect)
+kubectl exec falco-test-etc -- sh -c "echo 'test' >> /etc/passwd"
+
+# Vérifier les logs Falco
+kubectl logs -n falco daemonset/falco | grep -i "etc"
+```
+
+**Résultat attendu:** Alerte Falco sur modification de /etc
+
+**Temps estimé:** 2 minutes
+
+**Cleanup:**
+```bash
+kubectl delete pod falco-test-etc
+```
+
+---
+
+## 4. Tests Vault - PKI et Certificats
+
+### Test 4.1: Création automatique de certificat via cert-manager
+**Objectif:** Vérifier que cert-manager peut obtenir des certificats de Vault
+
+**Commandes:**
+```bash
+# Créer un certificat de test
+cat <<EOF | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: demo-certificate
+  namespace: default
+spec:
+  secretName: demo-tls
+  issuerRef:
+    name: vault-issuer
+    kind: ClusterIssuer
+  commonName: demo.example.com
+  dnsNames:
+  - demo.example.com
+  - www.demo.example.com
+EOF
+
+# Vérifier le statut
+kubectl get certificate demo-certificate -n default
+kubectl describe certificate demo-certificate -n default
+
+# Vérifier que le secret TLS est créé
+kubectl get secret demo-tls -n default
+```
+
+**Résultat attendu:** Certificat créé avec statut "Ready: True"
+
+**Temps estimé:** 1 minute
+
+**Cleanup:**
+```bash
+kubectl delete certificate demo-certificate -n default
+kubectl delete secret demo-tls -n default
+```
+
+---
+
+## 5. Tests Keycloak - IAM/SSO
+
+### Test 5.1: Authentification via Keycloak
+**Objectif:** Vérifier que Keycloak fonctionne et peut authentifier les utilisateurs
+
+**Commandes:**
+```bash
+# Port-forward Keycloak
+kubectl port-forward -n security-iam svc/keycloak 8080:80
+```
+
+**Vérification:**
+1. Ouvrir http://localhost:8080
+2. Login sur la console admin
+3. Créer un realm de test
+4. Créer un utilisateur de test
+5. Vérifier l'authentification
+
+**Temps estimé:** 3-5 minutes
+
+---
+
+### Test 5.2: Intégration OIDC (Option A ou B)
+**Objectif:** Authentification Kubernetes via Keycloak OIDC
+
+**Note:** À définir selon l'option choisie (Option A: kubelogin, Option B: gangway/dex)
+
+**Temps estimé:** TBD
+
+---
+
+## 6. Tests d'intégration
+
+### Test 6.1: Visualisation complète des données
+**Objectif:** Vérifier que toutes les sources de données sont visibles dans les dashboards
+
+**Vérifications:**
+- [ ] Grafana affiche les métriques Prometheus de tous les services
+- [ ] Grafana affiche les métriques Trivy
+- [ ] Kibana affiche les rapports de vulnérabilités Trivy
+- [ ] Elasticsearch contient les données (vérifier le count)
+
+**Commandes:**
+```bash
+# Vérifier le nombre de documents dans Elasticsearch
+ELASTIC_PASSWORD=$(kubectl get secret -n security-siem elasticsearch-master-credentials -o jsonpath='{.data.password}' | base64 -d)
+kubectl exec -n security-siem elasticsearch-master-0 -- curl -k -s -u "elastic:$ELASTIC_PASSWORD" "https://localhost:9200/_cat/indices?v"
+```
+
+**Temps estimé:** 5 minutes
+
+---
+
+### Test 6.2: Workflow complet de sécurité
+**Objectif:** Démonstration bout en bout du workflow de sécurité
+
+**Scénario:**
+1. Déployer une application avec une image vulnérable
+2. Vérifier que Gatekeeper valide les policies
+3. Trivy scanne et détecte les vulnérabilités
+4. Visualiser dans Kibana les CVE détaillés
+5. Visualiser dans Grafana les métriques agrégées
+6. Falco détecte des comportements runtime suspects
+7. Corriger l'image et redéployer
+8. Vérifier que les vulnérabilités diminuent
+
+**Temps estimé:** 10-15 minutes
+
+---
+
+## 7. Tests de haute disponibilité
+
+### Test 7.1: Résilience Vault
+**Objectif:** Vérifier que Vault en mode Raft survit à la perte d'un pod
+
+**Commandes:**
+```bash
+# Vérifier l'état initial
+kubectl exec -n security-iam vault-0 -- vault status
+
+# Supprimer un pod
+kubectl delete pod -n security-iam vault-1 --force --grace-period=0
+
+# Vérifier que le cluster reste opérationnel
+kubectl exec -n security-iam vault-0 -- vault status
+
+# Attendre que le pod redémarre
+kubectl wait --for=condition=ready pod/vault-1 -n security-iam --timeout=120s
+```
+
+**Résultat attendu:** Cluster Vault reste opérationnel
+
+**Temps estimé:** 3 minutes
+
+---
+
+### Test 7.2: Résilience Elasticsearch
+**Objectif:** Vérifier la réplication et disponibilité
+
+**Commandes:**
+```bash
+# Vérifier l'état du cluster
+ELASTIC_PASSWORD=$(kubectl get secret -n security-siem elasticsearch-master-credentials -o jsonpath='{.data.password}' | base64 -d)
+kubectl exec -n security-siem elasticsearch-master-0 -- curl -k -s -u "elastic:$ELASTIC_PASSWORD" "https://localhost:9200/_cluster/health?pretty"
+
+# Supprimer un pod
+kubectl delete pod -n security-siem elasticsearch-master-1 --force --grace-period=0
+
+# Vérifier que le cluster reste green/yellow
+kubectl exec -n security-siem elasticsearch-master-0 -- curl -k -s -u "elastic:$ELASTIC_PASSWORD" "https://localhost:9200/_cluster/health?pretty"
+```
+
+**Résultat attendu:** Cluster reste opérationnel (yellow acceptable temporairement)
+
+**Temps estimé:** 3 minutes
+
+---
+
+## 8. Tests de performance (optionnel)
+
+### Test 8.1: Charge sur Trivy
+**Objectif:** Vérifier les performances de scan à grande échelle
+
+**Commandes:**
+```bash
+# Déployer plusieurs pods
+for i in {1..10}; do
+  kubectl run load-test-$i --image=nginx:1.21
+done
+
+# Attendre et vérifier les scans
+sleep 300
+kubectl get vulnerabilityreports -A | wc -l
+```
+
+**Temps estimé:** 10 minutes
+
+---
+
+## Notes importantes
+
+### Ordre des tests
+1. Commencer par les tests unitaires (chaque service individuellement)
+2. Puis les tests d'intégration
+3. Finir par les tests de résilience
+
+### Environnement
+- Cluster Kind 4 nœuds
+- Windows 11 + Docker Desktop + WSL2 Ubuntu
+- Tous les services déployés et opérationnels
+
+### Cleanup général après la démo
+```bash
+# Supprimer tous les pods de test
+kubectl delete pod -l demo=test --all-namespaces
+
+# Supprimer tous les jobs de test
+kubectl delete job -l demo=test --all-namespaces
+```
+
+---
+
+## Checklist de préparation
+
+Avant de lancer la démo, vérifier que :
+- [ ] Tous les pods sont Running
+- [ ] Elasticsearch est accessible et contient des données
+- [ ] Kibana est accessible et le data view est créé
+- [ ] Grafana est accessible avec les dashboards configurés
+- [ ] Vault est initialisé et unsealed
+- [ ] Keycloak est accessible
+- [ ] Falco est running sur tous les nœuds
+- [ ] Gatekeeper a des policies configurées
+- [ ] Trivy Operator scanne activement
+- [ ] Le CronJob d'export Trivy fonctionne
+
+---
+
+## Temps total estimé
+- Tests rapides (essentiels): ~30 minutes
+- Tests complets: ~1-2 heures
+- Avec troubleshooting: prévoir 3 heures
+
+---
+
+## Ressources utiles
+
+### Port-forwards pour la démo
+```bash
+# Grafana
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+
+# Kibana
+kubectl port-forward -n security-siem svc/kibana-kibana 5601:5601
+
+# Vault
+kubectl port-forward -n security-iam svc/vault 8200:8200
+
+# Keycloak
+kubectl port-forward -n security-iam svc/keycloak 8080:80
+
+# Prometheus
+kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+```
+
+### Credentials
+```bash
+# Elasticsearch
+kubectl get secret -n security-siem elasticsearch-master-credentials -o jsonpath='{.data.password}' | base64 -d
+
+# Grafana
+# User: admin
+# Password: prom-operator
+
+# Vault root token
+kubectl get secret -n security-iam vault-init -o jsonpath='{.data.root-token}' | base64 -d
+```
