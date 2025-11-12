@@ -33,6 +33,31 @@ if ! kubectl get statefulset elasticsearch-master -n security-siem &>/dev/null; 
     exit 1
 fi
 
+# Créer un service account token pour Kibana
+echo ""
+echo "🔑 Création d'un service account token pour Kibana..."
+
+# Récupérer le mot de passe elastic
+ELASTIC_PASSWORD=$(kubectl get secret -n security-siem elasticsearch-master-credentials -o jsonpath='{.data.password}' | base64 -d)
+
+# Créer le service account token
+TOKEN_RESPONSE=$(kubectl exec -n security-siem elasticsearch-master-0 -- curl -s -k -u "elastic:$ELASTIC_PASSWORD" -X POST "https://localhost:9200/_security/service/elastic/kibana/credential/token/kibana-token" -H 'Content-Type: application/json')
+
+SERVICE_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"value":"[^"]*"' | cut -d'"' -f4)
+
+if [ -z "$SERVICE_TOKEN" ]; then
+    echo "❌ Échec de création du service account token"
+    echo "Response: $TOKEN_RESPONSE"
+    exit 1
+fi
+
+echo "✅ Service account token créé"
+
+# Créer un secret Kubernetes avec le token
+kubectl create secret generic kibana-service-token -n security-siem \
+  --from-literal=token="$SERVICE_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 # Ajouter le repo Helm
 echo ""
 echo "📦 Configuration du repository Helm..."
@@ -51,21 +76,15 @@ cat > /tmp/kibana-values.yaml <<EOF
 elasticsearchHosts: "https://elasticsearch-master:9200"
 
 extraEnvs:
-  - name: ELASTICSEARCH_USERNAME
+  - name: ELASTICSEARCH_SERVICEACCOUNTTOKEN
     valueFrom:
       secretKeyRef:
-        name: elasticsearch-master-credentials
-        key: username
-  - name: ELASTICSEARCH_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: elasticsearch-master-credentials
-        key: password
+        name: kibana-service-token
+        key: token
 
 kibanaConfig:
   kibana.yml: |
-    elasticsearch.username: "\${ELASTICSEARCH_USERNAME}"
-    elasticsearch.password: "\${ELASTICSEARCH_PASSWORD}"
+    elasticsearch.serviceAccountToken: "\${ELASTICSEARCH_SERVICEACCOUNTTOKEN}"
     elasticsearch.ssl.verificationMode: none
 
 resources:
