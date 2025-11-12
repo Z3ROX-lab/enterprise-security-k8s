@@ -16,14 +16,14 @@ if ! kubectl get deployment -n security-detection falco-falcosidekick &>/dev/nul
 fi
 
 # Vérifier que Prometheus existe
-if ! kubectl get prometheus -n monitoring prometheus-kube-prometheus-prometheus &>/dev/null; then
+if ! kubectl get prometheus -n security-siem prometheus-kube-prometheus-prometheus &>/dev/null; then
     echo "❌ Prometheus non trouvé"
     echo "Lancez d'abord : ./13-prometheus.sh"
     exit 1
 fi
 
 # Vérifier que Grafana existe
-if ! kubectl get deployment -n monitoring prometheus-grafana &>/dev/null; then
+if ! kubectl get deployment -n security-siem prometheus-grafana &>/dev/null; then
     echo "❌ Grafana non trouvé"
     echo "Lancez d'abord : ./14-grafana.sh"
     exit 1
@@ -110,12 +110,12 @@ echo ""
 echo "🖥️  Accès aux interfaces :"
 echo ""
 echo "  📊 Prometheus (vérifier les targets) :"
-echo "     kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090"
+echo "     kubectl port-forward -n security-siem svc/prometheus-kube-prometheus-prometheus 9090:9090"
 echo "     http://localhost:9090/targets"
 echo "     Chercher 'security-detection/falcosidekick'"
 echo ""
 echo "  📊 Grafana (créer des dashboards) :"
-echo "     kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
+echo "     kubectl port-forward -n security-siem svc/prometheus-grafana 3000:80"
 echo "     http://localhost:3000"
 echo "     Login : admin / prom-operator"
 echo ""
