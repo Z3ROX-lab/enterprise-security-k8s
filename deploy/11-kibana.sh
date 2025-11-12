@@ -46,16 +46,29 @@ helm uninstall kibana -n security-siem 2>/dev/null || true
 kubectl delete job,pod,configmap,secret,serviceaccount,role,rolebinding -n security-siem -l app=kibana --ignore-not-found=true
 sleep 5
 
+# Créer un fichier de configuration personnalisé pour Kibana
+cat > /tmp/kibana-values.yaml <<EOF
+elasticsearchHosts: "https://elasticsearch-master:9200"
+
+kibanaConfig:
+  kibana.yml: |
+    elasticsearch.ssl.verificationMode: none
+
+resources:
+  requests:
+    memory: 1Gi
+
+persistence:
+  enabled: false
+EOF
+
 # Déployer Kibana
 echo ""
 echo "📊 Déploiement de Kibana 8.5.1..."
 helm upgrade --install kibana elastic/kibana \
   --namespace security-siem \
   --version 8.5.1 \
-  --set resources.requests.memory=1Gi \
-  --set persistence.enabled=false \
-  --set elasticsearchHosts=https://elasticsearch-master:9200 \
-  --set kibanaConfig.kibana\\.yml."elasticsearch\\.ssl\\.verificationMode"=none \
+  --values /tmp/kibana-values.yaml \
   --timeout 15m \
   --wait=false
 
