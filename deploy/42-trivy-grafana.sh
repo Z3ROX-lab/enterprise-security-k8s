@@ -68,6 +68,13 @@ echo "  ✅ Service créé"
 # 3. Créer le ServiceMonitor pour Prometheus
 echo ""
 echo "3️⃣  Création du ServiceMonitor Prometheus..."
+
+# Supprimer l'ancien ServiceMonitor s'il existe (pour forcer le label update)
+if kubectl get servicemonitor trivy-operator -n trivy-system &>/dev/null; then
+    echo "  ℹ️  ServiceMonitor existant trouvé, suppression..."
+    kubectl delete servicemonitor trivy-operator -n trivy-system
+fi
+
 cat <<'EOF' | kubectl apply -f -
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -643,8 +650,18 @@ echo "  ✅ Dashboard Grafana créé"
 
 # 5. Attendre que Prometheus scrape les métriques
 echo ""
-echo "5️⃣  Attente de la collecte des métriques (30 sec)..."
-sleep 30
+echo "5️⃣  Attente de la collecte des métriques..."
+echo "  ⏳ Prometheus détecte le ServiceMonitor (cela peut prendre 1-2 minutes)..."
+
+for i in {1..6}; do
+    echo "  Vérification $i/6 (${i}0s)..."
+    sleep 10
+done
+
+echo "  ✅ Temps d'attente terminé"
+echo ""
+echo "🔍 Vérification du ServiceMonitor..."
+kubectl get servicemonitor trivy-operator -n trivy-system -o yaml | grep -A 2 "labels:"
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════╗"
