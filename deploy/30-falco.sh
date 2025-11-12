@@ -4,7 +4,7 @@ set -e
 
 echo "╔═══════════════════════════════════════════════════════════╗"
 echo "║              Falco Runtime Security                       ║"
-echo "║            (eBPF Driver pour Kind/WSL2)                  ║"
+echo "║          (Modern eBPF Driver pour Kind/WSL2)             ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -20,8 +20,8 @@ echo "  - Falco (runtime security)"
 echo "  - Falcosidekick (event forwarder)"
 echo "  - Falcosidekick UI (dashboard)"
 echo ""
-echo "ℹ️  Note : Utilise le driver 'eBPF' (compatible Kind/WSL2)"
-echo "   Le kernel module ne fonctionne pas sur Kind"
+echo "ℹ️  Note : Utilise le driver 'modern_ebpf' (compatible Kind/WSL2)"
+echo "   Ce driver ne nécessite pas d'init container"
 echo ""
 
 read -p "Continuer ? (y/n) " -n 1 -r
@@ -48,10 +48,8 @@ echo "🛡️  Déploiement de Falco..."
 helm upgrade --install falco falcosecurity/falco \
   --namespace security-detection \
   --version 4.0.0 \
-  --set driver.kind=ebpf \
+  --set driver.kind=modern_ebpf \
   --set driver.ebpf.hostNetwork=true \
-  --set driver.loader.enabled=false \
-  --set driver.loader.initContainer.enabled=false \
   --set falcosidekick.enabled=true \
   --set falcosidekick.webui.enabled=true \
   --set falcosidekick.webui.redis.storageEnabled=false \
