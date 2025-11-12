@@ -83,7 +83,7 @@ data:
   export.sh: |
     #!/bin/bash
 
-    ELASTICSEARCH_URL="http://elasticsearch-master.security-siem:9200"
+    ELASTICSEARCH_URL="https://elasticsearch-master.security-siem:9200"
     INDEX_NAME="trivy-vulnerabilities"
 
     echo "🔍 Récupération des VulnerabilityReports..."
@@ -183,7 +183,7 @@ data:
             DOC_ID="${NAMESPACE}_${NAME}_${CVE_ID}_${PACKAGE}"
             DOC_ID=$(echo "$DOC_ID" | tr '/:' '_')
 
-            curl -s -X POST "$ELASTICSEARCH_URL/$INDEX_NAME/_doc/$DOC_ID" \
+            curl -k -s -X POST "$ELASTICSEARCH_URL/$INDEX_NAME/_doc/$DOC_ID" \
                 -H 'Content-Type: application/json' \
                 -d "$DOC" > /dev/null
         done
@@ -194,7 +194,7 @@ data:
     # Afficher les stats
     echo ""
     echo "📊 Statistiques Elasticsearch :"
-    curl -s "$ELASTICSEARCH_URL/$INDEX_NAME/_count" | jq -r '"Total documents: \(.count)"'
+    curl -k -s "$ELASTICSEARCH_URL/$INDEX_NAME/_count" | jq -r '"Total documents: \(.count)"'
 EOF
 
 echo "  ✅ Script d'export créé"
@@ -251,7 +251,7 @@ kubectl get job -n trivy-system $JOB
 echo ""
 echo "5️⃣  Vérification des données dans Elasticsearch..."
 POD=$(kubectl get pod -n security-siem -l app=elasticsearch-master -o jsonpath='{.items[0].metadata.name}')
-DOC_COUNT=$(kubectl exec -n security-siem $POD -- curl -s http://localhost:9200/trivy-vulnerabilities/_count 2>/dev/null | grep -o '"count":[0-9]*' | cut -d: -f2)
+DOC_COUNT=$(kubectl exec -n security-siem $POD -- curl -k -s https://localhost:9200/trivy-vulnerabilities/_count 2>/dev/null | grep -o '"count":[0-9]*' | cut -d: -f2)
 
 if [ -n "$DOC_COUNT" ] && [ "$DOC_COUNT" -gt 0 ]; then
     echo "  ✅ $DOC_COUNT vulnérabilités indexées dans Elasticsearch"
