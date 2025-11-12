@@ -16,7 +16,7 @@ if ! kubectl get deployment -n trivy-system trivy-operator &>/dev/null; then
 fi
 
 # Vérifier que Prometheus existe
-if ! kubectl get deployment -n security-siem prometheus-server &>/dev/null; then
+if ! kubectl get deployment -n security-siem prometheus-kube-prometheus-operator &>/dev/null; then
     echo "❌ Prometheus non trouvé"
     echo "Lancez d'abord : ./13-prometheus.sh"
     exit 1
