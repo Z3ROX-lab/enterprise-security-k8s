@@ -94,11 +94,15 @@ echo "  ✅ Falcosidekick redémarré"
 echo ""
 echo "4️⃣  Génération d'une alerte de test..."
 
+# Nettoyer le pod s'il existe déjà
+kubectl delete pod falco-test-alert --force --grace-period=0 2>/dev/null || true
+
 # Créer un pod de test
-kubectl run falco-test-alert --image=nginx --restart=Never 2>/dev/null || kubectl delete pod falco-test-alert --force --grace-period=0 2>/dev/null && kubectl run falco-test-alert --image=nginx --restart=Never
+kubectl run falco-test-alert --image=nginx --restart=Never
 
 # Attendre que le pod démarre
-sleep 3
+echo "  ⏳ Attente du démarrage du pod..."
+sleep 5
 
 # Exécuter un shell (déclenche une alerte Falco)
 echo "  🔔 Déclenchement d'une alerte en exécutant un shell..."
