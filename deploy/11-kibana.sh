@@ -50,7 +50,17 @@ sleep 5
 cat > /tmp/kibana-values.yaml <<EOF
 elasticsearchHosts: "https://elasticsearch-master:9200"
 
-elasticsearchCredentialSecret: elasticsearch-master-credentials
+extraEnvs:
+  - name: ELASTICSEARCH_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: elasticsearch-master-credentials
+        key: username
+  - name: ELASTICSEARCH_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: elasticsearch-master-credentials
+        key: password
 
 kibanaConfig:
   kibana.yml: |
