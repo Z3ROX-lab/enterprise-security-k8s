@@ -124,7 +124,7 @@ kubectl exec -it falco-test -- /bin/bash
 # Taper quelques commandes puis exit
 
 # Vérifier les logs Falco
-kubectl logs -n falco daemonset/falco | grep -i "shell"
+kubectl logs -n security-detection daemonset/falco | grep -i "shell"
 ```
 
 **Résultat attendu:** Alerte Falco détectant le shell interactif
@@ -150,7 +150,7 @@ kubectl run falco-test-etc --image=nginx
 kubectl exec falco-test-etc -- sh -c "echo 'test' >> /etc/passwd"
 
 # Vérifier les logs Falco
-kubectl logs -n falco daemonset/falco | grep -i "etc"
+kubectl logs -n security-detection daemonset/falco | grep -i "etc"
 ```
 
 **Résultat attendu:** Alerte Falco sur modification de /etc
@@ -161,6 +161,85 @@ kubectl logs -n falco daemonset/falco | grep -i "etc"
 ```bash
 kubectl delete pod falco-test-etc
 ```
+
+---
+
+### Test 3.3: Vérification des alertes dans Falcosidekick UI et Kibana
+**Objectif:** Vérifier que les alertes Falco sont visibles dans les deux interfaces (temps réel + SIEM)
+
+**Partie A: Falcosidekick UI (Interface temps réel)**
+
+**Commandes:**
+```bash
+# Ouvrir l'interface Falcosidekick UI
+kubectl port-forward -n security-detection svc/falco-falcosidekick-ui 2802:2802
+```
+
+**Vérification dans le navigateur:**
+1. Ouvrir http://localhost:2802
+2. Login avec:
+   - Username: `admin`
+   - Password: `admin`
+3. Vérifier que des alertes sont présentes dans l'interface
+4. Tester les filtres par Priority (Critical, Warning, Notice)
+5. Tester les filtres par Rule
+
+**Générer une alerte de test:**
+```bash
+# Dans un autre terminal
+kubectl run test-falco-alert --image=nginx
+kubectl exec test-falco-alert -- /bin/bash -c "ls /etc"
+kubectl delete pod test-falco-alert
+```
+
+**Résultat attendu:** L'alerte apparaît dans Falcosidekick UI en quelques secondes
+
+---
+
+**Partie B: Kibana (Analyse SIEM)**
+
+**Commandes:**
+```bash
+# Ouvrir Kibana
+kubectl port-forward -n security-siem svc/kibana-kibana 5601:5601
+```
+
+**Vérification dans Kibana:**
+1. Ouvrir http://localhost:5601
+2. Login avec:
+   - Username: `elastic`
+   - Password: (obtenir avec `kubectl get secret -n security-siem elasticsearch-master-credentials -o jsonpath='{.data.password}' | base64 -d`)
+3. Créer le Data View si pas encore fait:
+   - Stack Management → Data Views
+   - Create data view
+   - Name: `Falco Alerts`
+   - Index pattern: `falco-*`
+   - Timestamp field: `time`
+   - Save
+4. Analytics → Discover → Sélectionner "Falco Alerts"
+5. Ajuster la plage de temps (Last 24 hours ou plus)
+6. Vérifier la présence d'alertes
+
+**Vérifier le nombre d'alertes dans Elasticsearch:**
+```bash
+ELASTIC_PASSWORD=$(kubectl get secret -n security-siem elasticsearch-master-credentials -o jsonpath='{.data.password}' | base64 -d)
+POD=$(kubectl get pod -n security-siem -l app=elasticsearch-master -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n security-siem $POD -- curl -k -s -u "elastic:$ELASTIC_PASSWORD" "https://localhost:9200/falco-*/_count" | jq
+```
+
+**Résultat attendu:**
+- Count > 0 dans Elasticsearch
+- Alertes visibles dans Kibana Discover
+- Champs disponibles: output, priority, rule, output_fields.*, hostname
+
+**Exemples de recherches dans Kibana:**
+```
+priority: "Critical"
+rule: "Terminal shell in container"
+output_fields.k8s_ns_name: "default"
+```
+
+**Temps estimé:** 5 minutes
 
 ---
 
