@@ -76,6 +76,7 @@ metadata:
   namespace: trivy-system
   labels:
     app.kubernetes.io/name: trivy-operator
+    release: prometheus
 spec:
   selector:
     matchLabels:
