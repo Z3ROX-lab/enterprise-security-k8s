@@ -64,6 +64,8 @@ extraEnvs:
 
 kibanaConfig:
   kibana.yml: |
+    elasticsearch.username: "\${ELASTICSEARCH_USERNAME}"
+    elasticsearch.password: "\${ELASTICSEARCH_PASSWORD}"
     elasticsearch.ssl.verificationMode: none
 
 resources:
