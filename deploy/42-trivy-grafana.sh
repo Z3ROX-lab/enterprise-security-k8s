@@ -35,18 +35,11 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-# 1. Reconfigurer Trivy Operator pour exposer les métriques
+# 1. Vérifier si les métriques sont déjà exposées
 echo ""
-echo "1️⃣  Activation des métriques Trivy Operator..."
-helm upgrade trivy-operator aqua/trivy-operator \
-  --namespace trivy-system \
-  --reuse-values \
-  --set trivy.ignoreUnfixed=true \
-  --set operator.metricsBindAddress=":8080" \
-  --set serviceMonitor.enabled=false \
-  --wait
-
-echo "  ✅ Métriques activées"
+echo "1️⃣  Vérification des métriques Trivy Operator..."
+echo "  ℹ️  Trivy Operator expose les métriques par défaut sur le port 8080"
+echo "  ✅ Pas de reconfiguration nécessaire"
 
 # 2. Créer un Service pour exposer les métriques
 echo ""
