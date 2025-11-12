@@ -50,6 +50,8 @@ helm upgrade --install falco falcosecurity/falco \
   --version 4.0.0 \
   --set driver.kind=ebpf \
   --set driver.ebpf.hostNetwork=true \
+  --set driver.loader.enabled=false \
+  --set driver.loader.initContainer.enabled=false \
   --set falcosidekick.enabled=true \
   --set falcosidekick.webui.enabled=true \
   --set falcosidekick.webui.redis.storageEnabled=false \
