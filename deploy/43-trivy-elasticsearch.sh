@@ -70,9 +70,21 @@ EOF
 
 echo "  ✅ ServiceAccount créé"
 
-# 2. Créer le ConfigMap avec le script d'export
+# 2. Créer un Secret avec les credentials Elasticsearch
 echo ""
-echo "2️⃣  Création du script d'export..."
+echo "2️⃣  Récupération des credentials Elasticsearch..."
+ELASTIC_PASSWORD=$(kubectl get secret -n security-siem elasticsearch-master-credentials -o jsonpath='{.data.password}' | base64 -d)
+
+kubectl create secret generic trivy-elasticsearch-creds -n trivy-system \
+  --from-literal=username=elastic \
+  --from-literal=password="$ELASTIC_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+echo "  ✅ Credentials configurés"
+
+# 3. Créer le ConfigMap avec le script d'export
+echo ""
+echo "3️⃣  Création du script d'export..."
 cat <<'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
@@ -85,6 +97,10 @@ data:
 
     ELASTICSEARCH_URL="https://elasticsearch-master.security-siem:9200"
     INDEX_NAME="trivy-vulnerabilities"
+
+    # Credentials from environment variables
+    ES_USER="${ELASTICSEARCH_USERNAME}"
+    ES_PASS="${ELASTICSEARCH_PASSWORD}"
 
     echo "🔍 Récupération des VulnerabilityReports..."
 
@@ -183,7 +199,7 @@ data:
             DOC_ID="${NAMESPACE}_${NAME}_${CVE_ID}_${PACKAGE}"
             DOC_ID=$(echo "$DOC_ID" | tr '/:' '_')
 
-            curl -k -s -X POST "$ELASTICSEARCH_URL/$INDEX_NAME/_doc/$DOC_ID" \
+            curl -k -s -u "$ES_USER:$ES_PASS" -X POST "$ELASTICSEARCH_URL/$INDEX_NAME/_doc/$DOC_ID" \
                 -H 'Content-Type: application/json' \
                 -d "$DOC" > /dev/null
         done
@@ -194,14 +210,14 @@ data:
     # Afficher les stats
     echo ""
     echo "📊 Statistiques Elasticsearch :"
-    curl -k -s "$ELASTICSEARCH_URL/$INDEX_NAME/_count" | jq -r '"Total documents: \(.count)"'
+    curl -k -s -u "$ES_USER:$ES_PASS" "$ELASTICSEARCH_URL/$INDEX_NAME/_count" | jq -r '"Total documents: \(.count)"'
 EOF
 
 echo "  ✅ Script d'export créé"
 
-# 3. Créer le CronJob
+# 4. Créer le CronJob
 echo ""
-echo "3️⃣  Création du CronJob (toutes les heures)..."
+echo "4️⃣  Création du CronJob (toutes les heures)..."
 cat <<'EOF' | kubectl apply -f -
 apiVersion: batch/v1
 kind: CronJob
@@ -222,6 +238,17 @@ spec:
           - name: exporter
             image: bitnami/kubectl:latest
             command: ["/bin/bash", "/scripts/export.sh"]
+            env:
+            - name: ELASTICSEARCH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: trivy-elasticsearch-creds
+                  key: username
+            - name: ELASTICSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: trivy-elasticsearch-creds
+                  key: password
             volumeMounts:
             - name: script
               mountPath: /scripts
@@ -234,9 +261,9 @@ EOF
 
 echo "  ✅ CronJob créé"
 
-# 4. Lancer un job immédiat pour tester
+# 5. Lancer un job immédiat pour tester
 echo ""
-echo "4️⃣  Lancement d'un export initial..."
+echo "5️⃣  Lancement d'un export initial..."
 kubectl create job -n trivy-system trivy-export-manual-$(date +%s) --from=cronjob/trivy-exporter
 
 echo "  ⏳ Attente de l'export (30 sec)..."
@@ -247,11 +274,11 @@ JOB=$(kubectl get jobs -n trivy-system --sort-by=.metadata.creationTimestamp | t
 echo "  📊 Statut du job: $JOB"
 kubectl get job -n trivy-system $JOB
 
-# 5. Vérifier qu'Elasticsearch a reçu les données
+# 6. Vérifier qu'Elasticsearch a reçu les données
 echo ""
-echo "5️⃣  Vérification des données dans Elasticsearch..."
+echo "6️⃣  Vérification des données dans Elasticsearch..."
 POD=$(kubectl get pod -n security-siem -l app=elasticsearch-master -o jsonpath='{.items[0].metadata.name}')
-DOC_COUNT=$(kubectl exec -n security-siem $POD -- curl -k -s https://localhost:9200/trivy-vulnerabilities/_count 2>/dev/null | grep -o '"count":[0-9]*' | cut -d: -f2)
+DOC_COUNT=$(kubectl exec -n security-siem $POD -- curl -k -s -u "elastic:$ELASTIC_PASSWORD" https://localhost:9200/trivy-vulnerabilities/_count 2>/dev/null | grep -o '"count":[0-9]*' | cut -d: -f2)
 
 if [ -n "$DOC_COUNT" ] && [ "$DOC_COUNT" -gt 0 ]; then
     echo "  ✅ $DOC_COUNT vulnérabilités indexées dans Elasticsearch"
