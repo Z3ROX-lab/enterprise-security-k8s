@@ -54,7 +54,8 @@ helm upgrade --install kibana elastic/kibana \
   --version 8.5.1 \
   --set resources.requests.memory=1Gi \
   --set persistence.enabled=false \
-  --set elasticsearchHosts=http://elasticsearch-master:9200 \
+  --set elasticsearchHosts=https://elasticsearch-master:9200 \
+  --set kibanaConfig.kibana\\.yml."elasticsearch\\.ssl\\.verificationMode"=none \
   --timeout 15m \
   --wait=false
 
