@@ -103,29 +103,27 @@ fi
 # Configurer PKI dans Vault
 echo "  📝 Configuration du backend PKI dans Vault..."
 
+# Utiliser des variables inline pour forcer VAULT_ADDR (export ne fonctionne pas toujours)
 kubectl exec -n security-iam vault-0 -- sh -c "
-export VAULT_ADDR='http://127.0.0.1:8200'
-export VAULT_TOKEN=$ROOT_TOKEN
-
 # Activer PKI si pas déjà fait
-vault secrets enable -path=pki pki 2>/dev/null || true
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault secrets enable -path=pki pki 2>/dev/null || true
 
 # Configurer les TTLs
-vault secrets tune -max-lease-ttl=87600h pki
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault secrets tune -max-lease-ttl=87600h pki
 
 # Générer le CA root
-vault write -field=certificate pki/root/generate/internal \
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault write -field=certificate pki/root/generate/internal \
     common_name='local.lab' \
     issuer_name='root-2024' \
     ttl=87600h > /dev/null 2>&1 || true
 
 # Configurer les URLs
-vault write pki/config/urls \
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault write pki/config/urls \
     issuing_certificates='http://vault.security-iam.svc.cluster.local:8200/v1/pki/ca' \
     crl_distribution_points='http://vault.security-iam.svc.cluster.local:8200/v1/pki/crl'
 
 # Créer un rôle pour les certificats Ingress
-vault write pki/roles/ingress-tls \
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault write pki/roles/ingress-tls \
     allowed_domains='local.lab' \
     allow_subdomains=true \
     allow_glob_domains=true \
@@ -133,7 +131,7 @@ vault write pki/roles/ingress-tls \
     ttl='720h'
 
 # Créer une policy pour cert-manager
-vault policy write cert-manager - <<EOF
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault policy write cert-manager - <<EOF
 path \"pki/sign/ingress-tls\" {
   capabilities = [\"create\", \"update\"]
 }
@@ -143,14 +141,14 @@ path \"pki/issue/ingress-tls\" {
 EOF
 
 # Activer l'authentification Kubernetes si pas déjà fait
-vault auth enable kubernetes 2>/dev/null || true
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault auth enable kubernetes 2>/dev/null || true
 
 # Configurer l'authentification Kubernetes
-vault write auth/kubernetes/config \
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault write auth/kubernetes/config \
     kubernetes_host='https://kubernetes.default.svc:443'
 
 # Créer un rôle pour cert-manager
-vault write auth/kubernetes/role/cert-manager \
+VAULT_ADDR='http://127.0.0.1:8200' VAULT_TOKEN='$ROOT_TOKEN' vault write auth/kubernetes/role/cert-manager \
     bound_service_account_names=cert-manager \
     bound_service_account_namespaces=cert-manager \
     policies=cert-manager \
