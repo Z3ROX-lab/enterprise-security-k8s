@@ -104,6 +104,7 @@ fi
 echo "  📝 Configuration du backend PKI dans Vault..."
 
 kubectl exec -n security-iam vault-0 -- sh -c "
+export VAULT_ADDR='http://127.0.0.1:8200'
 export VAULT_TOKEN=$ROOT_TOKEN
 
 # Activer PKI si pas déjà fait
