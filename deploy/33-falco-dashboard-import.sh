@@ -153,23 +153,26 @@ cat > /tmp/falco-dashboard.json <<'EOF'
       {
         "id": 5,
         "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
-        "type": "bargauge",
+        "type": "table",
         "title": "Top 5 règles Falco",
         "targets": [
           {
             "expr": "topk(5, sum by (rule) (falco_events))",
-            "legendFormat": "{{rule}}",
+            "format": "table",
+            "instant": true,
             "refId": "A"
           }
         ],
         "options": {
-          "orientation": "horizontal",
-          "displayMode": "gradient",
-          "showUnfilled": true
+          "showHeader": true,
+          "sortBy": [{"displayName": "Value", "desc": true}]
         },
         "fieldConfig": {
           "defaults": {
-            "color": {"mode": "continuous-RdYlGn"},
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            },
             "thresholds": {
               "mode": "absolute",
               "steps": [
@@ -178,8 +181,29 @@ cat > /tmp/falco-dashboard.json <<'EOF'
                 {"value": 500, "color": "red"}
               ]
             }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Value"},
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                }
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "indexByName": {"rule": 0, "Value": 1},
+              "renameByName": {"rule": "Règle Falco", "Value": "Nb alertes"}
+            }
           }
-        }
+        ]
       },
       {
         "id": 6,
