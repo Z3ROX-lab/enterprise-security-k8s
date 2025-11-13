@@ -243,6 +243,115 @@ output_fields.k8s_ns_name: "default"
 
 ---
 
+### Test 3.4: Vérification des métriques Falco dans Grafana
+**Objectif:** Vérifier que les métriques Falco sont collectées par Prometheus et visualisables dans Grafana
+
+**Partie A: Accès au dashboard Grafana Falco**
+
+**Commandes:**
+```bash
+# Ouvrir Grafana
+kubectl port-forward -n security-siem svc/prometheus-grafana 3000:80
+```
+
+**Vérification dans le navigateur:**
+1. Ouvrir http://localhost:3000
+2. Login avec:
+   - Username: `admin`
+   - Password: (obtenir avec `kubectl get secret -n security-siem prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d`)
+3. Cliquer sur **☰ (menu hamburger)** → **Dashboards**
+4. Chercher et ouvrir **"Falco Security Alerts"**
+
+**Dashboard panels disponibles:**
+- Panel 1: Taux d'alertes Falco (par seconde)
+- Panel 2: Total alertes reçues
+- Panel 3: Alertes par destination (Pie chart)
+- Panel 4: Taux d'erreurs par output
+- Panel 5: Latence Elasticsearch
+- Panel 6: Alertes par heure
+
+---
+
+**Partie B: Générer des alertes et observer les métriques**
+
+**Générer plusieurs alertes de test:**
+```bash
+# Test 1: Shell dans un conteneur
+kubectl run grafana-test-1 --image=nginx
+kubectl exec grafana-test-1 -- /bin/bash -c "ls /etc"
+kubectl delete pod grafana-test-1
+
+# Test 2: Modification de /etc
+kubectl run grafana-test-2 --image=nginx
+kubectl exec grafana-test-2 -- sh -c "echo test >> /etc/hosts"
+kubectl delete pod grafana-test-2
+
+# Test 3: Lecture de fichier sensible
+kubectl run grafana-test-3 --image=nginx
+kubectl exec grafana-test-3 -- cat /etc/shadow 2>/dev/null || true
+kubectl delete pod grafana-test-3
+```
+
+**Observer les changements dans Grafana:**
+1. Attendre 30 secondes (auto-refresh du dashboard)
+2. Observer l'augmentation du "Taux d'alertes Falco"
+3. Vérifier l'incrémentation du "Total alertes reçues"
+4. Observer la distribution dans "Alertes par destination"
+5. Vérifier que "Alertes par heure" augmente
+
+---
+
+**Partie C: Vérifier les métriques dans Prometheus (optionnel)**
+
+**Commandes:**
+```bash
+# Ouvrir Prometheus
+kubectl port-forward -n security-siem svc/prometheus-kube-prometheus-prometheus 9090:9090
+```
+
+**Vérification dans Prometheus:**
+1. Ouvrir http://localhost:9090
+2. Aller dans **Graph** → **Query**
+3. Tester les requêtes PromQL:
+
+```promql
+# Taux d'alertes par seconde
+rate(falcosidekick_inputs_total[5m])
+
+# Total d'alertes reçues
+falcosidekick_inputs_total
+
+# Alertes par output
+sum by (output) (falcosidekick_outputs_total)
+
+# Taux d'erreurs
+rate(falcosidekick_outputs_errors_total[5m])
+```
+
+4. Cliquer sur **Execute**
+5. Vérifier que les métriques retournent des valeurs
+
+---
+
+**Résultat attendu:**
+- Dashboard Falco accessible dans Grafana
+- Métriques se mettent à jour après génération d'alertes
+- Graphiques montrent l'activité en temps réel
+- Aucune erreur dans le panel "Taux d'erreurs"
+- Latence Elasticsearch < 1 seconde
+
+**Temps estimé:** 5 minutes
+
+**Note importante:**
+- **Grafana** affiche des **métriques agrégées** (statistiques, tendances)
+- Pour voir les **descriptions détaillées** des alertes, utiliser **Kibana** ou **Falcosidekick UI**
+- Différence :
+  - Grafana = Vue d'ensemble statistique (combien, quand, où)
+  - Kibana = Détails complets (quoi, pourquoi, comment)
+  - Falcosidekick UI = Temps réel (alertes individuelles)
+
+---
+
 ## 4. Tests Vault - PKI et Certificats
 
 ### Test 4.1: Création automatique de certificat via cert-manager
