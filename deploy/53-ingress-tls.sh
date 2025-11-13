@@ -68,15 +68,35 @@ fi
 
 echo "  ✅ Vault est unsealed"
 
-# Obtenir le root token (chercher dans plusieurs endroits possibles)
-ROOT_TOKEN=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.vault-root}' 2>/dev/null | base64 -d || \
-             kubectl get secret -n security-iam vault-init -o jsonpath='{.data.root-token}' 2>/dev/null | base64 -d || \
-             echo "")
+# Obtenir le root token (priorité : fichier local > secrets K8s)
+ROOT_TOKEN=""
 
+# 1. Essayer depuis vault-keys.txt (LOCAL)
+if [ -f "vault-keys.txt" ]; then
+    ROOT_TOKEN=$(grep "Initial Root Token:" vault-keys.txt | awk '{print $NF}')
+    if [ -n "$ROOT_TOKEN" ]; then
+        echo "  📄 Root token lu depuis vault-keys.txt"
+    fi
+fi
+
+# 2. Sinon, essayer depuis les secrets Kubernetes
+if [ -z "$ROOT_TOKEN" ]; then
+    ROOT_TOKEN=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.vault-root}' 2>/dev/null | base64 -d || \
+                 kubectl get secret -n security-iam vault-init -o jsonpath='{.data.root-token}' 2>/dev/null | base64 -d || \
+                 echo "")
+    if [ -n "$ROOT_TOKEN" ]; then
+        echo "  🔑 Root token lu depuis Kubernetes secret"
+    fi
+fi
+
+# 3. Échec si aucun token trouvé
 if [ -z "$ROOT_TOKEN" ]; then
     echo "  ⚠️  Root token Vault introuvable"
-    echo "  Vérifiez que le secret vault-unseal-keys ou vault-init existe avec le root token"
-    echo "  Vous pouvez aussi utiliser le fichier vault-keys.txt"
+    echo ""
+    echo "  Solutions possibles :"
+    echo "    1. Créer vault-keys.txt avec la sortie de 'vault operator init'"
+    echo "    2. Sauvegarder le root token dans un secret Kubernetes"
+    echo ""
     exit 1
 fi
 
