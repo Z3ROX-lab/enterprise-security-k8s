@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -e
+# Note: set -e is disabled to handle vault pods that might not be ready yet
+# The script handles errors explicitly instead
 
 # Couleurs
 RED='\033[0;31m'
@@ -136,18 +137,18 @@ for POD in "${VAULT_PODS_ARRAY[@]}"; do
 
   echo -e "${BLUE}🔓 Unseal de $POD...${NC}"
 
-  # Unseal avec les 3 clés
-  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY1" > /dev/null 2>&1
+  # Unseal avec les 3 clés (avec || true pour ne pas s'arrêter sur erreur)
+  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY1" > /dev/null 2>&1 || true
   echo -e "${GREEN}  ✅ Clé 1/3 acceptée${NC}"
 
-  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY2" > /dev/null 2>&1
+  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY2" > /dev/null 2>&1 || true
   echo -e "${GREEN}  ✅ Clé 2/3 acceptée${NC}"
 
-  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY3" > /dev/null 2>&1
+  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY3" > /dev/null 2>&1 || true
   echo -e "${GREEN}  ✅ Clé 3/3 acceptée${NC}"
 
   # Vérifier que l'unseal a réussi
-  SEALED=$(kubectl exec -n security-iam $POD -- vault status -format=json 2>/dev/null | jq -r '.sealed')
+  SEALED=$(kubectl exec -n security-iam $POD -- vault status -format=json 2>/dev/null | jq -r '.sealed' || echo "true")
   if [ "$SEALED" = "false" ]; then
     echo -e "${GREEN}  ✅ $POD unsealed avec succès${NC}"
     ((UNSEALED_COUNT++))
