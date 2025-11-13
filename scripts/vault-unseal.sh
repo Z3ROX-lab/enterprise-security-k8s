@@ -37,17 +37,17 @@ echo -e "${YELLOW}🔒 Vault est sealed. Unseal en cours...${NC}"
 echo
 
 # Vérifier que le secret existe
-if ! kubectl get secret -n security-iam vault-init &>/dev/null; then
-  echo -e "${RED}❌ Erreur: Secret vault-init non trouvé${NC}"
+if ! kubectl get secret -n security-iam vault-unseal-keys &>/dev/null; then
+  echo -e "${RED}❌ Erreur: Secret vault-unseal-keys non trouvé${NC}"
   echo -e "${YELLOW}💡 Vault n'a peut-être pas été initialisé correctement${NC}"
   exit 1
 fi
 
 # Récupérer les 3 clés d'unseal
 echo -e "${BLUE}🔑 Récupération des clés d'unseal depuis Kubernetes secret...${NC}"
-KEY1=$(kubectl get secret -n security-iam vault-init -o jsonpath='{.data.unseal-key-1}' | base64 -d)
-KEY2=$(kubectl get secret -n security-iam vault-init -o jsonpath='{.data.unseal-key-2}' | base64 -d)
-KEY3=$(kubectl get secret -n security-iam vault-init -o jsonpath='{.data.unseal-key-3}' | base64 -d)
+KEY1=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-1}' | base64 -d)
+KEY2=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-2}' | base64 -d)
+KEY3=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-3}' | base64 -d)
 
 if [ -z "$KEY1" ] || [ -z "$KEY2" ] || [ -z "$KEY3" ]; then
   echo -e "${RED}❌ Erreur: Impossible de récupérer les clés d'unseal${NC}"
