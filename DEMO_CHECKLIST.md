@@ -3,6 +3,10 @@
 ## Vue d'ensemble
 Cette checklist contient tous les tests à effectuer pour démontrer le fonctionnement de la stack de sécurité Kubernetes.
 
+## 📚 Documentation complémentaire
+- **[DASHBOARDS_GUIDE.md](./DASHBOARDS_GUIDE.md)** : Guide complet pour configurer et interpréter les dashboards Kibana et Grafana
+- **[CREDENTIALS.md](./CREDENTIALS.md)** : Toutes les commandes pour récupérer les credentials des services
+
 ---
 
 ## 1. Tests Trivy - Vulnérabilités
@@ -263,12 +267,12 @@ kubectl port-forward -n security-siem svc/prometheus-grafana 3000:80
 4. Chercher et ouvrir **"Falco Security Alerts"**
 
 **Dashboard panels disponibles:**
-- Panel 1: Taux d'alertes Falco (par seconde)
-- Panel 2: Total alertes reçues
-- Panel 3: Alertes par destination (Pie chart)
-- Panel 4: Taux d'erreurs par output
-- Panel 5: Latence Elasticsearch
-- Panel 6: Alertes par heure
+- Panel 1: Taux d'alertes Falco (par seconde) - Graphique temporel
+- Panel 2: Total alertes reçues - Compteur unique
+- Panel 3: Alertes par destination (Elasticsearch, WebUI) - Pie chart
+- Panel 4: Alertes Falco par priorité (Critical, Notice) - Graphique multi-séries
+- Panel 5: Top 5 règles Falco - Table triée
+- Panel 6: Alertes par heure - Stat unique avec graphique
 
 ---
 
@@ -352,6 +356,83 @@ topk(5, sum by (rule) (falco_events))
   - Grafana = Vue d'ensemble statistique (combien, quand, où)
   - Kibana = Détails complets (quoi, pourquoi, comment)
   - Falcosidekick UI = Temps réel (alertes individuelles)
+
+**📘 Guide complet des dashboards : Voir [DASHBOARDS_GUIDE.md](./DASHBOARDS_GUIDE.md)**
+
+---
+
+### Test 3.5: Falco Tuning - Réduction des faux positifs
+**Objectif:** Réduire le bruit des alertes en filtrant les namespaces de confiance (monitoring, système)
+
+**Contexte:**
+- Avant tuning : ~2000 alertes/h (beaucoup de bruit des outils de monitoring)
+- Après tuning : ~50-100 alertes/h (uniquement alertes pertinentes)
+
+**Commandes:**
+```bash
+# Exécuter le script de tuning
+./deploy/34-falco-tuning.sh
+
+# Le script va :
+# 1. Créer des règles Falco custom
+# 2. Filtrer les namespaces de confiance :
+#    - security-siem (Grafana, Prometheus, Elasticsearch, Kibana)
+#    - trivy-system (scans de vulnérabilités)
+#    - kube-system (composants système, CNI)
+#    - security-detection (Falco, Falcosidekick)
+# 3. Redémarrer Falco avec les nouvelles règles
+
+# Répondre 'y' quand demandé pour appliquer la mise à jour
+```
+
+**Vérification après 5-10 minutes:**
+
+1. **Dans Grafana** (Dashboard Falco Security Alerts):
+   - Panel "Alertes par heure" devrait montrer ~50-100 au lieu de ~2000
+   - Panel "Top 5 règles Falco" devrait montrer principalement des règles sur namespaces applicatifs
+
+2. **Dans Kibana** (Discover → Falco Alerts):
+   ```
+   # Vérifier que les alertes système sont filtrées
+   NOT k8s.ns.name: (kube-system OR security-siem OR trivy-system OR security-detection)
+   ```
+   - La plupart des alertes devraient être sur namespaces applicatifs (`default`, vos apps)
+
+3. **Tester avec un pod dans namespace par défaut** (devrait générer une alerte):
+   ```bash
+   kubectl run test-tuning --image=nginx -n default
+   kubectl exec -n default test-tuning -- /bin/bash -c "ls /etc"
+   kubectl delete pod test-tuning -n default
+   ```
+   - Cette alerte DOIT apparaître dans Grafana/Kibana (namespace non filtré)
+
+4. **Tester avec un pod dans namespace filtré** (ne devrait PAS générer d'alerte):
+   ```bash
+   kubectl run test-filtered --image=nginx -n security-siem
+   kubectl exec -n security-siem test-filtered -- /bin/bash -c "ls /etc"
+   kubectl delete pod test-filtered -n security-siem
+   ```
+   - Cette alerte NE DOIT PAS apparaître (namespace filtré)
+
+**Résultat attendu:**
+- ✅ Volume d'alertes réduit de ~95%
+- ✅ Alertes sur namespaces applicatifs toujours présentes
+- ✅ Alertes sur namespaces système/monitoring filtrées
+- ✅ Dashboard Grafana plus lisible avec des alertes pertinentes
+
+**Temps estimé:** 3-5 minutes
+
+**Ajuster le tuning:**
+```bash
+# Pour ajouter d'autres namespaces à filtrer
+kubectl edit cm falco-rules-custom -n security-detection
+
+# Ajouter votre namespace dans la liste trusted_namespaces
+# Puis redémarrer Falco
+kubectl rollout restart daemonset falco -n security-detection
+```
+
+**📘 Pour comprendre comment interpréter les alertes restantes : Voir [DASHBOARDS_GUIDE.md](./DASHBOARDS_GUIDE.md) section "Interprétation des données"**
 
 ---
 
