@@ -29,23 +29,46 @@ if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
 fi
 
 # Vérifier que Vault pod existe
-if ! kubectl get pod -n security-iam vault-0 &>/dev/null; then
-  echo -e "${RED}❌ Erreur: Pod vault-0 non trouvé dans namespace security-iam${NC}"
+if ! kubectl get pod -n security-iam -l app.kubernetes.io/name=vault &>/dev/null; then
+  echo -e "${RED}❌ Erreur: Aucun pod Vault trouvé dans namespace security-iam${NC}"
   exit 1
 fi
 
-# Vérifier le statut actuel
-echo -e "${BLUE}📊 Vérification du statut de Vault...${NC}"
-if kubectl exec -n security-iam vault-0 -- vault status &>/dev/null; then
-  SEALED=$(kubectl exec -n security-iam vault-0 -- vault status -format=json 2>/dev/null | jq -r '.sealed')
-  if [ "$SEALED" = "false" ]; then
-    echo -e "${GREEN}✅ Vault est déjà unsealed !${NC}"
-    kubectl exec -n security-iam vault-0 -- vault status
-    exit 0
-  fi
+# Détecter tous les pods Vault
+VAULT_PODS=$(kubectl get pods -n security-iam -l app.kubernetes.io/name=vault -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^vault-[0-9]' || echo "")
+
+if [ -z "$VAULT_PODS" ]; then
+  echo -e "${RED}❌ Erreur: Aucun pod Vault trouvé${NC}"
+  exit 1
 fi
 
-echo -e "${YELLOW}🔒 Vault est sealed. Unseal en cours...${NC}"
+VAULT_PODS_ARRAY=($VAULT_PODS)
+echo -e "${BLUE}📋 Pods Vault détectés: ${VAULT_PODS_ARRAY[@]}${NC}"
+
+# Vérifier le statut de tous les pods
+echo -e "${BLUE}📊 Vérification du statut de tous les pods Vault...${NC}"
+ALL_UNSEALED=true
+for POD in "${VAULT_PODS_ARRAY[@]}"; do
+  if kubectl exec -n security-iam $POD -- vault status &>/dev/null; then
+    SEALED=$(kubectl exec -n security-iam $POD -- vault status -format=json 2>/dev/null | jq -r '.sealed')
+    if [ "$SEALED" = "true" ]; then
+      ALL_UNSEALED=false
+      echo -e "${YELLOW}  🔒 $POD est sealed${NC}"
+    else
+      echo -e "${GREEN}  ✅ $POD est unsealed${NC}"
+    fi
+  else
+    ALL_UNSEALED=false
+    echo -e "${YELLOW}  🔒 $POD est sealed${NC}"
+  fi
+done
+
+if [ "$ALL_UNSEALED" = "true" ]; then
+  echo -e "${GREEN}✅ Tous les pods Vault sont déjà unsealed !${NC}"
+  exit 0
+fi
+
+echo -e "${YELLOW}🔒 Certains pods sont sealed. Unseal en cours...${NC}"
 echo
 
 # Déterminer la source des clés (fichier ou Kubernetes secret)
@@ -96,36 +119,73 @@ fi
 
 echo
 
-# Unseal avec la clé 1
-echo -e "${BLUE}🔓 Unseal avec clé 1/3...${NC}"
-kubectl exec -n security-iam vault-0 -- vault operator unseal "$KEY1" > /dev/null 2>&1
-echo -e "${GREEN}  ✅ Clé 1 acceptée (Progression: 1/3)${NC}"
+# Unseal tous les pods Vault
+UNSEALED_COUNT=0
+FAILED_COUNT=0
 
-# Unseal avec la clé 2
-echo -e "${BLUE}🔓 Unseal avec clé 2/3...${NC}"
-kubectl exec -n security-iam vault-0 -- vault operator unseal "$KEY2" > /dev/null 2>&1
-echo -e "${GREEN}  ✅ Clé 2 acceptée (Progression: 2/3)${NC}"
+for POD in "${VAULT_PODS_ARRAY[@]}"; do
+  # Vérifier si ce pod est déjà unsealed
+  if kubectl exec -n security-iam $POD -- vault status &>/dev/null; then
+    SEALED=$(kubectl exec -n security-iam $POD -- vault status -format=json 2>/dev/null | jq -r '.sealed')
+    if [ "$SEALED" = "false" ]; then
+      echo -e "${GREEN}⏭️  $POD déjà unsealed, skip${NC}"
+      ((UNSEALED_COUNT++))
+      continue
+    fi
+  fi
 
-# Unseal avec la clé 3
-echo -e "${BLUE}🔓 Unseal avec clé 3/3...${NC}"
-kubectl exec -n security-iam vault-0 -- vault operator unseal "$KEY3" > /dev/null 2>&1
-echo -e "${GREEN}  ✅ Clé 3 acceptée (Progression: 3/3)${NC}"
+  echo -e "${BLUE}🔓 Unseal de $POD...${NC}"
+
+  # Unseal avec les 3 clés
+  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY1" > /dev/null 2>&1
+  echo -e "${GREEN}  ✅ Clé 1/3 acceptée${NC}"
+
+  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY2" > /dev/null 2>&1
+  echo -e "${GREEN}  ✅ Clé 2/3 acceptée${NC}"
+
+  kubectl exec -n security-iam $POD -- vault operator unseal "$KEY3" > /dev/null 2>&1
+  echo -e "${GREEN}  ✅ Clé 3/3 acceptée${NC}"
+
+  # Vérifier que l'unseal a réussi
+  SEALED=$(kubectl exec -n security-iam $POD -- vault status -format=json 2>/dev/null | jq -r '.sealed')
+  if [ "$SEALED" = "false" ]; then
+    echo -e "${GREEN}  ✅ $POD unsealed avec succès${NC}"
+    ((UNSEALED_COUNT++))
+  else
+    echo -e "${RED}  ❌ $POD toujours sealed${NC}"
+    ((FAILED_COUNT++))
+  fi
+  echo
+done
+
+# Résumé final
+echo -e "${BLUE}╔═══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║                    Résumé final                          ║${NC}"
+echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo
 
-# Vérifier le statut final
-echo -e "${BLUE}📊 Statut final de Vault :${NC}"
-echo -e "${GREEN}"
-kubectl exec -n security-iam vault-0 -- vault status
-echo -e "${NC}"
+for POD in "${VAULT_PODS_ARRAY[@]}"; do
+  SEALED=$(kubectl exec -n security-iam $POD -- vault status -format=json 2>/dev/null | jq -r '.sealed')
+  HA_MODE=$(kubectl exec -n security-iam $POD -- vault status -format=json 2>/dev/null | jq -r '.ha_mode' || echo "unknown")
 
-# Vérifier que c'est bien unsealed
-SEALED=$(kubectl exec -n security-iam vault-0 -- vault status -format=json 2>/dev/null | jq -r '.sealed')
-if [ "$SEALED" = "false" ]; then
+  if [ "$SEALED" = "false" ]; then
+    if [ "$HA_MODE" = "active" ]; then
+      echo -e "${GREEN}  ✅ $POD: unsealed (HA Mode: active - LEADER)${NC}"
+    else
+      echo -e "${GREEN}  ✅ $POD: unsealed (HA Mode: $HA_MODE)${NC}"
+    fi
+  else
+    echo -e "${RED}  ❌ $POD: sealed${NC}"
+  fi
+done
+
+echo
+if [ $FAILED_COUNT -eq 0 ]; then
   echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
-  echo -e "${GREEN}║              ✅ Vault unsealed avec succès !              ║${NC}"
+  echo -e "${GREEN}║         ✅ Tous les pods Vault unsealed avec succès !     ║${NC}"
   echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
   exit 0
 else
-  echo -e "${RED}❌ Erreur: Vault est toujours sealed${NC}"
+  echo -e "${RED}⚠️  $FAILED_COUNT pod(s) n'ont pas pu être unsealed${NC}"
   exit 1
 fi
