@@ -55,12 +55,12 @@ metadata:
   name: falcosidekick
   namespace: security-detection
   labels:
-    app.kubernetes.io/name: falcosidekick
     release: prometheus  # Label crucial pour la découverte par Prometheus
 spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: falcosidekick
+      app.kubernetes.io/component: core  # Cibler uniquement le service principal (pas l'UI)
   endpoints:
   - port: http
     path: /metrics
