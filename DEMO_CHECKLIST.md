@@ -316,16 +316,19 @@ kubectl port-forward -n security-siem svc/prometheus-kube-prometheus-prometheus 
 
 ```promql
 # Taux d'alertes par seconde
-rate(falcosidekick_inputs_total[5m])
+rate(falcosidekick_inputs[5m])
 
 # Total d'alertes reçues
-falcosidekick_inputs_total
+falcosidekick_inputs
 
-# Alertes par output
-sum by (output) (falcosidekick_outputs_total)
+# Alertes par destination
+sum by (destination) (falcosidekick_outputs)
 
-# Taux d'erreurs
-rate(falcosidekick_outputs_errors_total[5m])
+# Alertes Falco par priorité
+sum by (priority) (falco_events)
+
+# Top 5 règles Falco
+topk(5, sum by (rule) (falco_events))
 ```
 
 4. Cliquer sur **Execute**

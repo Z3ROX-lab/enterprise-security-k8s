@@ -49,7 +49,7 @@ cat > /tmp/falco-dashboard.json <<'EOF'
         "title": "Taux d'alertes Falco (par seconde)",
         "targets": [
           {
-            "expr": "rate(falcosidekick_inputs_total[5m])",
+            "expr": "rate(falcosidekick_inputs[5m])",
             "legendFormat": "Alertes/sec",
             "refId": "A"
           }
@@ -77,7 +77,7 @@ cat > /tmp/falco-dashboard.json <<'EOF'
         "title": "Total alertes reçues",
         "targets": [
           {
-            "expr": "falcosidekick_inputs_total",
+            "expr": "falcosidekick_inputs",
             "refId": "A"
           }
         ],
@@ -107,8 +107,8 @@ cat > /tmp/falco-dashboard.json <<'EOF'
         "title": "Alertes par destination",
         "targets": [
           {
-            "expr": "sum by (output) (falcosidekick_outputs_total)",
-            "legendFormat": "{{output}}",
+            "expr": "sum by (destination) (falcosidekick_outputs)",
+            "legendFormat": "{{destination}}",
             "refId": "A"
           }
         ],
@@ -127,11 +127,11 @@ cat > /tmp/falco-dashboard.json <<'EOF'
         "id": 4,
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
         "type": "timeseries",
-        "title": "Taux d'erreurs par output",
+        "title": "Alertes Falco par priorité",
         "targets": [
           {
-            "expr": "rate(falcosidekick_outputs_errors_total[5m])",
-            "legendFormat": "{{output}}",
+            "expr": "sum by (priority) (falco_events)",
+            "legendFormat": "{{priority}}",
             "refId": "A"
           }
         ],
@@ -145,42 +145,39 @@ cat > /tmp/falco-dashboard.json <<'EOF'
             "custom": {
               "drawStyle": "line",
               "lineInterpolation": "linear",
-              "fillOpacity": 0
-            },
-            "unit": "reqps"
+              "fillOpacity": 10
+            }
           }
         }
       },
       {
         "id": 5,
         "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
-        "type": "gauge",
-        "title": "Latence Elasticsearch (sec)",
+        "type": "bargauge",
+        "title": "Top 5 règles Falco",
         "targets": [
           {
-            "expr": "avg(falcosidekick_outputs_latency_seconds{output=\"elasticsearch\"})",
+            "expr": "topk(5, sum by (rule) (falco_events))",
+            "legendFormat": "{{rule}}",
             "refId": "A"
           }
         ],
         "options": {
-          "orientation": "auto",
-          "showThresholdLabels": false,
-          "showThresholdMarkers": true
+          "orientation": "horizontal",
+          "displayMode": "gradient",
+          "showUnfilled": true
         },
         "fieldConfig": {
           "defaults": {
-            "color": {"mode": "thresholds"},
+            "color": {"mode": "continuous-RdYlGn"},
             "thresholds": {
               "mode": "absolute",
               "steps": [
                 {"value": null, "color": "green"},
-                {"value": 0.1, "color": "yellow"},
-                {"value": 0.5, "color": "red"}
+                {"value": 100, "color": "yellow"},
+                {"value": 500, "color": "red"}
               ]
-            },
-            "unit": "s",
-            "min": 0,
-            "max": 1
+            }
           }
         }
       },
@@ -191,7 +188,7 @@ cat > /tmp/falco-dashboard.json <<'EOF'
         "title": "Alertes par heure",
         "targets": [
           {
-            "expr": "increase(falcosidekick_inputs_total[1h])",
+            "expr": "increase(falcosidekick_inputs[1h])",
             "legendFormat": "Dernière heure",
             "refId": "A"
           }
@@ -280,8 +277,8 @@ echo "Dashboard créé avec 6 panels :"
 echo "  1. 📈 Taux d'alertes Falco (par seconde)"
 echo "  2. 📊 Total alertes reçues"
 echo "  3. 🥧 Alertes par destination (Elasticsearch, WebUI)"
-echo "  4. ⚠️  Taux d'erreurs par output"
-echo "  5. ⏱️  Latence Elasticsearch"
+echo "  4. 🔴 Alertes Falco par priorité (Critical, Notice, etc.)"
+echo "  5. 📊 Top 5 règles Falco les plus déclenchées"
 echo "  6. 📊 Alertes par heure"
 echo ""
 echo "🖥️  Accès au dashboard :"
