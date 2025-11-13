@@ -68,12 +68,15 @@ fi
 
 echo "  ✅ Vault est unsealed"
 
-# Obtenir le root token
-ROOT_TOKEN=$(kubectl get secret -n security-iam vault-init -o jsonpath='{.data.root-token}' 2>/dev/null | base64 -d || echo "")
+# Obtenir le root token (chercher dans plusieurs endroits possibles)
+ROOT_TOKEN=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.vault-root}' 2>/dev/null | base64 -d || \
+             kubectl get secret -n security-iam vault-init -o jsonpath='{.data.root-token}' 2>/dev/null | base64 -d || \
+             echo "")
 
 if [ -z "$ROOT_TOKEN" ]; then
     echo "  ⚠️  Root token Vault introuvable"
-    echo "  Vault doit être initialisé avec : ./deploy/20-vault.sh"
+    echo "  Vérifiez que le secret vault-unseal-keys ou vault-init existe avec le root token"
+    echo "  Vous pouvez aussi utiliser le fichier vault-keys.txt"
     exit 1
 fi
 
