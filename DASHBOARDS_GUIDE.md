@@ -58,7 +58,25 @@ Ce script crée un dashboard avec 6 panels pré-configurés.
 - **Interprétation** :
   - **Elasticsearch** : Alertes stockées pour analyse SIEM dans Kibana
   - **WebUI** : Alertes visibles dans Falcosidekick UI en temps réel
-  - Les deux destinations doivent avoir le même nombre (chaque alerte va aux 2 outputs)
+  - **Pourquoi deux destinations ?** Chaque alerte générée par Falco est **dupliquée et envoyée simultanément** vers les deux outputs
+  - **Ratio attendu** : 50/50 entre Elasticsearch et WebUI
+  - **Exemple** : Si 1000 alertes générées → elasticsearch: 1000 + webui: 1000 = 2000 total affiché
+
+**Architecture de routage** :
+```
+Falco (détection)
+  ↓
+  Une alerte générée
+  ↓
+Falcosidekick (routeur)
+  ├→ Elasticsearch (stockage long terme + SIEM dans Kibana)
+  └→ WebUI (visualisation temps réel, Redis avec TTL)
+```
+
+**Cas d'usage** :
+- **Incident en cours** → Utilisez Falcosidekick UI (alertes temps réel)
+- **Investigation après incident** → Utilisez Kibana (historique complet, recherche)
+- **Vue d'ensemble statistique** → Utilisez Grafana (métriques agrégées, tendances)
 
 #### 4. Alertes Falco par priorité
 - **Type** : Time series (graphique temporel multi-séries)
@@ -407,6 +425,124 @@ kubectl edit cm falco-rules-custom -n security-detection
 ```
 
 Après modification, redémarrer Falco pour appliquer.
+
+---
+
+## Configuration de Falcosidekick - Routing multi-destinations
+
+### Pourquoi deux destinations pour chaque alerte ?
+
+Falcosidekick est configuré pour router **chaque alerte vers plusieurs destinations simultanément**. Cette architecture offre des avantages complémentaires :
+
+### Configuration actuelle
+
+```yaml
+# Configuration Falcosidekick (deploy/31-falco-elasticsearch-config.sh)
+config:
+  elasticsearch:
+    hostport: "http://elasticsearch-master:9200"
+    index: "falco"
+    type: "_doc"
+    # Stockage persistant pour SIEM
+
+  webui:
+    url: "http://falco-falcosidekick-ui:2802"
+    # Interface temps réel (Redis avec TTL court)
+```
+
+### Flux des alertes
+
+```
+1. Falco détecte un événement suspect
+   ↓
+2. Falco envoie l'alerte à Falcosidekick (HTTP)
+   ↓
+3. Falcosidekick reçoit l'alerte → +1 sur falcosidekick_inputs
+   ↓
+4. Falcosidekick route vers TOUTES les destinations configurées :
+   ├→ Elasticsearch → +1 sur falcosidekick_outputs{destination="elasticsearch"}
+   └→ WebUI         → +1 sur falcosidekick_outputs{destination="webui"}
+   ↓
+5. Prometheus collecte les métriques toutes les 30s
+   ↓
+6. Grafana affiche dans le pie chart :
+   - elasticsearch: 1000 alertes
+   - webui: 1000 alertes
+   Total affiché: 2000 (mais ce sont les mêmes 1000 alertes dupliquées)
+```
+
+### Avantages de cette architecture
+
+| Destination | Type de stockage | Rétention | Cas d'usage | Interface |
+|-------------|------------------|-----------|-------------|-----------|
+| **Elasticsearch** | Persistant (disk) | Configurable (jours/mois) | Investigation, audit, compliance | Kibana (recherche, agrégations) |
+| **WebUI** | Éphémère (Redis) | Court terme (TTL) | Monitoring temps réel, triage | Falcosidekick UI (alertes live) |
+
+### Exemple concret
+
+**Scénario** : Un shell suspect est détecté dans un container
+
+1. **Grafana** (vue d'ensemble) :
+   - Panel "Alertes par heure" : +1 alerte
+   - Panel "Alertes par destination" : elasticsearch +1, webui +1
+   - Panel "Alertes par priorité" : Critical +1
+
+2. **Falcosidekick UI** (temps réel) :
+   - L'alerte apparaît immédiatement dans l'interface
+   - Filtres rapides par priorité/règle
+   - Idéal pour la réaction immédiate
+
+3. **Kibana** (investigation) :
+   - Recherche détaillée : `rule: "Terminal shell in container"`
+   - Corrélation avec d'autres événements
+   - Historique complet du pod
+   - Export pour rapports
+
+### Métriques à surveiller
+
+**Cohérence des destinations** :
+```promql
+# Vérifier que les deux destinations reçoivent le même nombre
+sum(falcosidekick_outputs{destination="elasticsearch"})
+≈
+sum(falcosidekick_outputs{destination="webui"})
+```
+
+Si les deux chiffres divergent significativement :
+- ✅ Légère différence (< 1%) : Normal (race conditions, timing)
+- ⚠️ Différence importante (> 5%) : Problème de connectivité ou de performance sur une destination
+
+**Vérifier les erreurs** :
+```bash
+# Logs de Falcosidekick
+kubectl logs -n security-detection deployment/falco-falcosidekick
+
+# Rechercher des erreurs d'envoi
+kubectl logs -n security-detection deployment/falco-falcosidekick | grep -i error
+```
+
+### Ajouter d'autres destinations (optionnel)
+
+Falcosidekick supporte plus de 50 destinations. Exemples :
+
+```yaml
+# Slack
+config:
+  slack:
+    webhookurl: "https://hooks.slack.com/services/XXX"
+    minimumpriority: "critical"
+
+# PagerDuty
+  pagerduty:
+    routingkey: "xxx"
+    minimumpriority: "critical"
+
+# Teams
+  teams:
+    webhookurl: "https://outlook.office.com/webhook/xxx"
+```
+
+Voir [Falcosidekick outputs](https://github.com/falcosecurity/falcosidekick#outputs) pour la liste complète.
 
 ---
 
