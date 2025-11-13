@@ -208,23 +208,23 @@ cat > /tmp/falco-dashboard.json <<'EOF'
       {
         "id": 6,
         "gridPos": {"h": 8, "w": 6, "x": 18, "y": 8},
-        "type": "bargauge",
+        "type": "stat",
         "title": "Alertes par heure",
         "targets": [
           {
-            "expr": "increase(falcosidekick_inputs[1h])",
-            "legendFormat": "Dernière heure",
+            "expr": "sum(increase(falcosidekick_inputs[1h]))",
             "refId": "A"
           }
         ],
         "options": {
-          "orientation": "horizontal",
-          "displayMode": "gradient",
-          "showUnfilled": true
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "auto",
+          "orientation": "auto"
         },
         "fieldConfig": {
           "defaults": {
-            "color": {"mode": "continuous-GrYlRd"},
+            "color": {"mode": "thresholds"},
             "thresholds": {
               "mode": "absolute",
               "steps": [
@@ -232,7 +232,8 @@ cat > /tmp/falco-dashboard.json <<'EOF'
                 {"value": 50, "color": "yellow"},
                 {"value": 100, "color": "red"}
               ]
-            }
+            },
+            "unit": "short"
           }
         }
       }
