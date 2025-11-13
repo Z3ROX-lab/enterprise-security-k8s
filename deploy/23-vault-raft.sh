@@ -113,6 +113,34 @@ if [[ $REPLY =~ ^yes$ ]]; then
 
         echo "  ✅ Clés sauvegardées dans le secret 'vault-unseal-keys'"
         echo ""
+
+        # Sauvegarder dans vault-keys.txt (LOCAL, pas dans git)
+        echo "  💾 Sauvegarde des clés dans vault-keys.txt (local, gitignored)..."
+        cat > vault-keys.txt <<EOF
+Unseal Key 1: $UNSEAL_KEY_1
+Unseal Key 2: $UNSEAL_KEY_2
+Unseal Key 3: $UNSEAL_KEY_3
+Unseal Key 4: $UNSEAL_KEY_4
+Unseal Key 5: $UNSEAL_KEY_5
+
+Initial Root Token: $ROOT_TOKEN
+
+Vault initialized with 5 key shares and a key threshold of 3. Please securely
+distribute the key shares printed above. When the Vault is re-sealed,
+restarted, or stopped, you must supply at least 3 of these keys to unseal it
+before it can start servicing requests.
+
+Vault does not store the generated root key. Without at least 3 keys to
+reconstruct the root key, Vault will remain permanently sealed!
+
+It is possible to generate new unseal keys, provided you have a quorum of
+existing unseal keys shares. See "vault operator rekey" for more information.
+EOF
+        echo "  ✅ Clés sauvegardées dans vault-keys.txt"
+        echo "     ⚠️  Ce fichier contient des secrets ! Il est gitignored (ne sera pas committé)"
+        echo "     ⚠️  Sauvegardez-le dans un endroit sûr (gestionnaire de mots de passe, Vault externe, etc.)"
+        echo ""
+
         echo "  2️⃣  Unseal vault-0 (3 clés)..."
         kubectl exec -n security-iam vault-0 -- vault operator unseal "$UNSEAL_KEY_1" > /dev/null
         kubectl exec -n security-iam vault-0 -- vault operator unseal "$UNSEAL_KEY_2" > /dev/null
