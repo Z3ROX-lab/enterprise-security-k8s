@@ -241,9 +241,9 @@ fi
 echo ""
 echo "3️⃣  Import du dashboard dans Grafana..."
 
-# Credentials Grafana par défaut
+# Récupérer le mot de passe Grafana depuis le secret
 GRAFANA_USER="admin"
-GRAFANA_PASS="prom-operator"
+GRAFANA_PASS=$(kubectl get secret -n security-siem prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d)
 GRAFANA_URL="http://localhost:3000"
 
 # Importer le dashboard
@@ -288,7 +288,7 @@ echo "🖥️  Accès au dashboard :"
 echo "     kubectl port-forward -n security-siem svc/prometheus-grafana 3000:80"
 echo "     http://localhost:3000"
 echo ""
-echo "     Login : admin / prom-operator"
+echo "     Login : admin / admin123"
 echo "     Puis : Dashboards → Falco Security Alerts"
 echo ""
 echo "💡 Le dashboard se rafraîchit toutes les 30 secondes automatiquement"
