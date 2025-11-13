@@ -16,6 +16,18 @@ echo "║           Récupération automatique des clés              ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
+# Aide
+if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+    echo "Usage:"
+    echo "  1. Depuis un fichier contenant la sortie de 'vault operator init' :"
+    echo "     ./scripts/vault-unseal.sh vault-keys.txt"
+    echo ""
+    echo "  2. Depuis le secret Kubernetes (par défaut) :"
+    echo "     ./scripts/vault-unseal.sh"
+    echo ""
+    exit 0
+fi
+
 # Vérifier que Vault pod existe
 if ! kubectl get pod -n security-iam vault-0 &>/dev/null; then
   echo -e "${RED}❌ Erreur: Pod vault-0 non trouvé dans namespace security-iam${NC}"
@@ -36,25 +48,52 @@ fi
 echo -e "${YELLOW}🔒 Vault est sealed. Unseal en cours...${NC}"
 echo
 
-# Vérifier que le secret existe
-if ! kubectl get secret -n security-iam vault-unseal-keys &>/dev/null; then
-  echo -e "${RED}❌ Erreur: Secret vault-unseal-keys non trouvé${NC}"
-  echo -e "${YELLOW}💡 Vault n'a peut-être pas été initialisé correctement${NC}"
-  exit 1
+# Déterminer la source des clés (fichier ou Kubernetes secret)
+if [ -n "$1" ]; then
+  # Mode FICHIER : lire depuis le fichier passé en argument
+  if [ ! -f "$1" ]; then
+    echo -e "${RED}❌ Erreur: Fichier '$1' non trouvé${NC}"
+    exit 1
+  fi
+
+  echo -e "${BLUE}📄 Lecture des clés depuis le fichier: $1${NC}"
+
+  # Parser les clés du fichier
+  KEY1=$(grep "Unseal Key 1:" "$1" | awk '{print $NF}')
+  KEY2=$(grep "Unseal Key 2:" "$1" | awk '{print $NF}')
+  KEY3=$(grep "Unseal Key 3:" "$1" | awk '{print $NF}')
+
+  if [ -z "$KEY1" ] || [ -z "$KEY2" ] || [ -z "$KEY3" ]; then
+    echo -e "${RED}❌ Erreur: Impossible de lire les clés depuis le fichier${NC}"
+    echo -e "${YELLOW}💡 Format attendu : sortie de 'vault operator init'${NC}"
+    exit 1
+  fi
+
+  echo -e "${GREEN}✅ 3 clés récupérées depuis le fichier${NC}"
+else
+  # Mode KUBERNETES : lire depuis le secret (comportement par défaut)
+  if ! kubectl get secret -n security-iam vault-unseal-keys &>/dev/null; then
+    echo -e "${RED}❌ Erreur: Secret vault-unseal-keys non trouvé${NC}"
+    echo -e "${YELLOW}💡 Utilisez: ./scripts/vault-unseal.sh vault-keys.txt${NC}"
+    echo -e "${YELLOW}   Ou créez le secret avec: ./scripts/vault-save-keys.sh${NC}"
+    exit 1
+  fi
+
+  echo -e "${BLUE}🔑 Récupération des clés depuis Kubernetes secret...${NC}"
+
+  KEY1=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-1}' | base64 -d)
+  KEY2=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-2}' | base64 -d)
+  KEY3=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-3}' | base64 -d)
+
+  if [ -z "$KEY1" ] || [ -z "$KEY2" ] || [ -z "$KEY3" ]; then
+    echo -e "${RED}❌ Erreur: Impossible de récupérer les clés depuis le secret${NC}"
+    echo -e "${YELLOW}💡 Utilisez: ./scripts/vault-unseal.sh vault-keys.txt${NC}"
+    exit 1
+  fi
+
+  echo -e "${GREEN}✅ 3 clés récupérées depuis Kubernetes${NC}"
 fi
 
-# Récupérer les 3 clés d'unseal
-echo -e "${BLUE}🔑 Récupération des clés d'unseal depuis Kubernetes secret...${NC}"
-KEY1=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-1}' | base64 -d)
-KEY2=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-2}' | base64 -d)
-KEY3=$(kubectl get secret -n security-iam vault-unseal-keys -o jsonpath='{.data.unseal-key-3}' | base64 -d)
-
-if [ -z "$KEY1" ] || [ -z "$KEY2" ] || [ -z "$KEY3" ]; then
-  echo -e "${RED}❌ Erreur: Impossible de récupérer les clés d'unseal${NC}"
-  exit 1
-fi
-
-echo -e "${GREEN}✅ 3 clés récupérées${NC}"
 echo
 
 # Unseal avec la clé 1
