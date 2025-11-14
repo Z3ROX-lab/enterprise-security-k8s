@@ -260,6 +260,51 @@ kubectl port-forward -n security-siem svc/prometheus-grafana 3000:80
 
 ## 🌐 Accès aux Interfaces
 
+### ⚠️ Problème d'accès avec Kind + MetalLB + Windows
+
+**Symptôme** : Timeout lors de l'accès à `https://grafana.local.lab/` alors que les Ingress et certificats sont configurés.
+
+**Cause** : L'IP MetalLB (ex: `172.19.255.200`) est dans le réseau Docker interne et **n'est pas accessible depuis Windows**.
+
+**Solutions** :
+
+#### Solution 1 : Port-forward l'Ingress Controller (RECOMMANDÉ)
+
+```bash
+# Lancer le script de fix automatique
+./scripts/fix-ingress-access.sh
+
+# OU manuellement
+kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 80:80 443:443
+```
+
+Puis configurer le fichier Windows hosts avec **127.0.0.1** :
+
+```
+# C:\Windows\System32\drivers\etc\hosts
+127.0.0.1  grafana.local.lab kibana.local.lab prometheus.local.lab falco-ui.local.lab
+```
+
+Accéder à : `https://grafana.local.lab/`
+
+#### Solution 2 : Recréer Kind avec port mapping (long terme)
+
+Pour un mapping natif des ports 80/443 sans port-forward :
+
+```bash
+# ⚠️ ATTENTION: Détruit le cluster actuel !
+./scripts/recreate-kind-with-port-mapping.sh
+
+# Puis redéployer la stack
+./scripts/deploy-complete.sh
+```
+
+Avantages : Pas besoin de port-forward, ports standard 80/443.
+
+Inconvénients : Nécessite de recréer le cluster et redéployer tout.
+
+---
+
 ### Avec port-forward (sans TLS)
 
 ```bash
