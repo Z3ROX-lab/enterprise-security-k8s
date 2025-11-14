@@ -128,8 +128,8 @@ output "grafana_url" {
 }
 
 output "kibana_url" {
-  description = "URL Kibana (via port-forward)"
-  value       = var.enable_monitoring ? "kubectl port-forward -n security-siem svc/kibana-kibana 5601:5601" : null
+  description = "Kibana désactivé - Utilisez Wazuh Dashboard à la place"
+  value       = "kubectl port-forward -n security-detection svc/wazuh-dashboard 5443:5601"
 }
 
 output "keycloak_url" {

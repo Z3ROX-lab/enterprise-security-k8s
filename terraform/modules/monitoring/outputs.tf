@@ -9,8 +9,8 @@ output "elasticsearch_service" {
 }
 
 output "kibana_service" {
-  description = "Service Kibana"
-  value       = "kibana-kibana.${kubernetes_namespace.security_siem.metadata[0].name}.svc.cluster.local:5601"
+  description = "Service Kibana (null si désactivé)"
+  value       = var.enable_kibana ? "kibana-kibana.${kubernetes_namespace.security_siem.metadata[0].name}.svc.cluster.local:5601" : null
 }
 
 output "grafana_service" {

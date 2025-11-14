@@ -13,6 +13,7 @@ desktop.ini
 *.pem
 secrets/
 *.env
+vault-keys.txt
 
 # Terraform
 .terraform/

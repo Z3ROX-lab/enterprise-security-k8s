@@ -88,7 +88,10 @@ resource "helm_release" "keycloak" {
     value = "edge"
   }
 
-  timeout = 600
+  # Timeout augmenté car PostgreSQL + Keycloak peuvent être lents
+  # wait=false pour permettre à Terraform de continuer même si démarrage lent
+  timeout = 1200
+  wait    = false
 }
 
 # ========================================
@@ -130,7 +133,10 @@ resource "helm_release" "vault" {
     value = "true"
   }
 
-  timeout = 600
+  # Timeout augmenté pour le démarrage de Vault
+  # wait=false pour permettre à Terraform de continuer
+  timeout = 1200
+  wait    = false
 }
 
 # ========================================
@@ -160,16 +166,18 @@ resource "helm_release" "cert_manager" {
 }
 
 # ClusterIssuer pour certificats auto-signés
-resource "kubernetes_manifest" "selfsigned_issuer" {
-  manifest = {
-    apiVersion = "cert-manager.io/v1"
-    kind       = "ClusterIssuer"
-    metadata = {
-      name = "selfsigned-issuer"
-    }
-    spec = {
-      selfSigned = {}
-    }
+resource "null_resource" "selfsigned_issuer" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      cat <<EOF | kubectl apply -f -
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: selfsigned-issuer
+      spec:
+        selfSigned: {}
+      EOF
+    EOT
   }
 
   depends_on = [helm_release.cert_manager]
@@ -186,10 +194,15 @@ resource "helm_release" "falco" {
   namespace  = kubernetes_namespace.security_detection.metadata[0].name
   version    = "4.0.0"
 
-  # eBPF driver (mieux que kernel module)
+  # Kernel module pour WSL2/Kind (eBPF ne fonctionne pas bien sur WSL2)
   set {
     name  = "driver.kind"
-    value = "ebpf"
+    value = "module"
+  }
+
+  set {
+    name  = "driver.loader.initContainer.enabled"
+    value = "true"
   }
 
   # Falcosidekick pour export logs
@@ -209,45 +222,71 @@ resource "helm_release" "falco" {
     value = var.elasticsearch_url
   }
 
-  # Rules personnalisées
-  set {
-    name  = "customRules.rules-custom\\.yaml"
-    value = file("${path.module}/falco-rules/custom-rules.yaml")
-  }
+  # Note: Custom rules can be added via ConfigMap after deployment
+  # See falco-rules/custom-rules.yaml for example rules
 
-  timeout = 600
+  # Timeout augmenté car eBPF driver peut prendre du temps
+  # wait=false pour permettre à Terraform de continuer
+  timeout = 1200
+  wait    = false
 }
 
 # ========================================
 # HOST INTRUSION DETECTION - WAZUH
 # ========================================
+#
+# Note: Wazuh n'a plus de chart Helm officiel public.
+# Déploiement via Kustomize depuis le repository GitHub officiel.
+# https://documentation.wazuh.com/current/deployment-options/deploying-with-kubernetes/index.html
 
-resource "helm_release" "wazuh" {
-  name       = "wazuh"
-  repository = "https://wazuh.github.io/wazuh-kubernetes"
-  chart      = "wazuh"
-  namespace  = kubernetes_namespace.security_detection.metadata[0].name
-  version    = "4.7.0"
+resource "null_resource" "wazuh_deployment" {
+  count = var.enable_wazuh ? 1 : 0
 
-  # Wazuh manager
-  set {
-    name  = "wazuh-manager.replicas"
-    value = "1"
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      echo "======================================"
+      echo "Deploying Wazuh via Kustomize..."
+      echo "======================================"
+
+      # Créer le namespace si nécessaire
+      kubectl create namespace ${kubernetes_namespace.security_detection.metadata[0].name} --dry-run=client -o yaml | kubectl apply -f -
+
+      # Cloner le repo Wazuh si nécessaire
+      WAZUH_REPO="/tmp/wazuh-kubernetes"
+      if [ ! -d "$WAZUH_REPO" ]; then
+        echo "Cloning Wazuh Kubernetes repository..."
+        git clone --depth 1 https://github.com/wazuh/wazuh-kubernetes.git $WAZUH_REPO
+      else
+        echo "Updating Wazuh Kubernetes repository..."
+        cd $WAZUH_REPO && git pull
+      fi
+
+      # Déployer Wazuh avec Kustomize local
+      echo "Applying Wazuh manifests..."
+      kubectl apply -k $WAZUH_REPO/deployments/kubernetes/ -n ${kubernetes_namespace.security_detection.metadata[0].name}
+
+      echo ""
+      echo "======================================"
+      echo "Wazuh deployment initiated!"
+      echo "======================================"
+      echo ""
+      echo "Monitor deployment with:"
+      echo "  kubectl get pods -n ${kubernetes_namespace.security_detection.metadata[0].name} -w"
+      echo ""
+      echo "Wait for pods to be Ready (5-10 minutes):"
+      echo "  - wazuh-manager-master-0"
+      echo "  - wazuh-indexer-0"
+      echo "  - wazuh-dashboard-xxxxx"
+      echo ""
+      echo "Access dashboard:"
+      echo "  kubectl port-forward -n ${kubernetes_namespace.security_detection.metadata[0].name} svc/wazuh-dashboard 5443:443"
+      echo "  https://localhost:5443 (admin/SecretPassword)"
+      echo ""
+    EOT
   }
 
-  # Wazuh indexer (Elasticsearch fork)
-  set {
-    name  = "wazuh-indexer.replicas"
-    value = "1"
-  }
-
-  # Wazuh dashboard
-  set {
-    name  = "wazuh-dashboard.replicas"
-    value = "1"
-  }
-
-  timeout = 600
+  depends_on = [kubernetes_namespace.security_detection]
 }
 
 # ========================================
@@ -277,48 +316,40 @@ resource "helm_release" "gatekeeper" {
 }
 
 # Constraint Templates OPA
-resource "kubernetes_manifest" "require_labels_template" {
-  manifest = {
-    apiVersion = "templates.gatekeeper.sh/v1"
-    kind       = "ConstraintTemplate"
-    metadata = {
-      name = "k8srequiredlabels"
-    }
-    spec = {
-      crd = {
-        spec = {
-          names = {
-            kind = "K8sRequiredLabels"
-          }
-          validation = {
-            openAPIV3Schema = {
-              type = "object"
-              properties = {
-                labels = {
-                  type = "array"
-                  items = {
-                    type = "string"
-                  }
-                }
+resource "null_resource" "require_labels_template" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      cat <<'YAML' | kubectl apply -f -
+      apiVersion: templates.gatekeeper.sh/v1
+      kind: ConstraintTemplate
+      metadata:
+        name: k8srequiredlabels
+      spec:
+        crd:
+          spec:
+            names:
+              kind: K8sRequiredLabels
+            validation:
+              openAPIV3Schema:
+                type: object
+                properties:
+                  labels:
+                    type: array
+                    items:
+                      type: string
+        targets:
+          - target: admission.k8s.gatekeeper.sh
+            rego: |
+              package k8srequiredlabels
+              violation[{"msg": msg, "details": {"missing_labels": missing}}] {
+                provided := {label | input.review.object.metadata.labels[label]}
+                required := {label | label := input.parameters.labels[_]}
+                missing := required - provided
+                count(missing) > 0
+                msg := sprintf("You must provide labels: %v", [missing])
               }
-            }
-          }
-        }
-      }
-      targets = [{
-        target = "admission.k8s.gatekeeper.sh"
-        rego = <<-EOF
-          package k8srequiredlabels
-          violation[{"msg": msg, "details": {"missing_labels": missing}}] {
-            provided := {label | input.review.object.metadata.labels[label]}
-            required := {label | label := input.parameters.labels[_]}
-            missing := required - provided
-            count(missing) > 0
-            msg := sprintf("You must provide labels: %v", [missing])
-          }
-        EOF
-      }]
-    }
+      YAML
+    EOT
   }
 
   depends_on = [helm_release.gatekeeper]

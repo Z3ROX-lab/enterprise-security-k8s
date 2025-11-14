@@ -25,9 +25,9 @@ variable "elasticsearch_url" {
 }
 
 variable "enable_wazuh" {
-  description = "Déployer Wazuh HIDS"
+  description = "Déployer Wazuh HIDS via Kustomize (désactivé par défaut - problème chemin repo)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_falco" {

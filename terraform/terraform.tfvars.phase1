@@ -1,0 +1,7 @@
+# Configuration Progressive - Phase 1: IAM Only
+
+# Désactiver temporairement les composants problématiques
+enable_falco = false
+enable_wazuh = false
+enable_gatekeeper = false
+enable_trivy = false

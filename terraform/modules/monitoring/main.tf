@@ -67,8 +67,10 @@ resource "helm_release" "elasticsearch" {
   timeout = 600
 }
 
-# ELK Stack - Kibana
+# ELK Stack - Kibana (optionnel, désactivé par défaut)
+# Note: Wazuh fournit son propre dashboard basé sur Kibana
 resource "helm_release" "kibana" {
+  count      = var.enable_kibana ? 1 : 0
   name       = "kibana"
   repository = "https://helm.elastic.co"
   chart      = "kibana"
@@ -103,18 +105,8 @@ resource "helm_release" "filebeat" {
   version    = "8.5.1"
 
   set {
-    name  = "filebeatConfig.filebeat\\.yml"
-    value = yamlencode({
-      filebeat.inputs = [{
-        type = "container"
-        paths = [
-          "/var/log/containers/*.log"
-        ]
-      }]
-      output.elasticsearch = {
-        hosts = ["http://elasticsearch-master:9200"]
-      }
-    })
+    name  = "daemonset.enabled"
+    value = "true"
   }
 
   depends_on = [helm_release.elasticsearch]
