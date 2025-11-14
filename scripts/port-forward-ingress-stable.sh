@@ -1,14 +1,12 @@
 #!/bin/bash
 
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║     Port-forward Ingress HTTPS vers Windows (localhost)   ║"
+echo "║   Port-forward Ingress HTTPS (avec auto-restart)         ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
 echo "📋 Ce script expose le nginx-ingress-controller sur localhost:8443"
-echo "   pour permettre l'accès depuis Windows via:"
-echo ""
-echo "   https://localhost:8443/  (avec Host header routing)"
+echo "   avec redémarrage automatique en cas de déconnexion"
 echo ""
 echo "⚠️  Configurer le fichier hosts Windows avec:"
 echo "   127.0.0.1 grafana.local.lab"
@@ -26,25 +24,53 @@ echo "   https://falco-ui.local.lab:8443"
 echo "   https://keycloak.local.lab:8443"
 echo "   https://vault.local.lab:8443"
 echo ""
-echo "⚠️  Ce terminal restera occupé par le port-forward."
-echo "   Pour arrêter : Ctrl+C"
+echo "✨ Nouveau: Redémarrage automatique en cas de déconnexion"
+echo "⚠️  Ce terminal restera occupé. Pour arrêter : Ctrl+C"
 echo ""
 
-read -p "Démarrer le port-forward ? (y/n) " -n 1 -r
+read -p "Démarrer le port-forward avec auto-restart ? (y/n) " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Port-forward annulé."
     exit 0
 fi
 
+# Fonction pour cleanup
+cleanup() {
+    echo ""
+    echo "🛑 Arrêt du port-forward..."
+    exit 0
+}
+
+trap cleanup SIGINT SIGTERM
+
 echo ""
-echo "🚀 Démarrage du port-forward..."
+echo "🚀 Démarrage du port-forward avec auto-restart..."
 echo "   Local:  localhost:8443"
 echo "   Remote: ingress-nginx-controller:443"
 echo ""
-echo "✅ Port-forward actif ! Accédez aux services depuis Windows."
-echo ""
 
-kubectl port-forward -n ingress-nginx \
-    svc/ingress-nginx-controller 8443:443 \
-    --address 0.0.0.0
+# Compteur de tentatives
+attempt=1
+
+while true; do
+    echo "📡 Tentative #$attempt - $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "✅ Port-forward actif ! Accédez aux services depuis Windows."
+    echo ""
+
+    # Lancer le port-forward
+    kubectl port-forward -n ingress-nginx \
+        svc/ingress-nginx-controller 8443:443 \
+        --address 0.0.0.0 2>&1
+
+    # Si on arrive ici, le port-forward s'est arrêté
+    exit_code=$?
+
+    echo ""
+    echo "⚠️  Port-forward interrompu (exit code: $exit_code)"
+    echo "🔄 Redémarrage dans 3 secondes..."
+    echo ""
+
+    sleep 3
+    attempt=$((attempt + 1))
+done
