@@ -1,0 +1,56 @@
+---
+# Ingress pour Keycloak
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-ingress
+  namespace: security-iam
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # Keycloak nécessite ces headers pour la redirection
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-Host $host;
+      proxy_set_header X-Forwarded-Port $server_port;
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: keycloak.local.lab
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: keycloak
+            port:
+              number: 80
+---
+# Ingress pour Vault
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vault-ingress
+  namespace: security-iam
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: vault.local.lab
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vault
+            port:
+              number: 8200
