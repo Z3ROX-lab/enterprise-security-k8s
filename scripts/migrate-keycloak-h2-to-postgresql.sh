@@ -30,6 +30,7 @@ fi
 # Variables
 NAMESPACE="security-iam"
 KEYCLOAK_POD="keycloak-0"
+KEYCLOAK_STATEFULSET="keycloak"
 PG_POD="keycloak-postgresql-0"
 BACKUP_DIR="/tmp/keycloak-migration-$(date +%Y%m%d-%H%M%S)"
 H2_EXPORT_FILE="$BACKUP_DIR/keycloak-h2-export.json"
@@ -214,7 +215,7 @@ echo ""
 echo "🔟 Mise à jour de la configuration Keycloak..."
 
 # Patcher le StatefulSet Keycloak pour utiliser PostgreSQL
-kubectl patch statefulset "$KEYCLOAK_POD" -n "$NAMESPACE" --type=json -p='[
+kubectl patch statefulset "$KEYCLOAK_STATEFULSET" -n "$NAMESPACE" --type=json -p='[
   {
     "op": "replace",
     "path": "/spec/template/spec/containers/0/env",
