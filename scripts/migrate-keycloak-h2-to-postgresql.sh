@@ -139,27 +139,71 @@ echo "║     ÉTAPE 2: CONFIGURATION POSTGRESQL + PERSISTENCE       ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
-echo "4️⃣  Activation de la persistence PostgreSQL..."
-helm upgrade keycloak-postgresql bitnami/postgresql \
+echo "⚠️  Note: Kubernetes ne permet pas de modifier les volumeClaimTemplates"
+echo "   d'un StatefulSet existant. On va recréer PostgreSQL avec persistence."
+echo ""
+
+echo "4️⃣  Backup des données PostgreSQL actuelles (si elles existent)..."
+PG_BACKUP_FILE="$BACKUP_DIR/postgresql-current-backup.sql"
+
+# Vérifier si PostgreSQL a des données
+PG_TABLES=$(kubectl exec -n "$NAMESPACE" "$PG_POD" -- \
+    psql -U keycloak -d keycloak -t -c \
+    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | tr -d ' ' || echo "0")
+
+if [ "$PG_TABLES" != "0" ] && [ -n "$PG_TABLES" ]; then
+    echo "   PostgreSQL contient $PG_TABLES tables, backup en cours..."
+    kubectl exec -n "$NAMESPACE" "$PG_POD" -- \
+        pg_dump -U keycloak -d keycloak --clean --if-exists > "$PG_BACKUP_FILE" 2>/dev/null || true
+    echo "✅ Backup PostgreSQL sauvegardé"
+else
+    echo "✅ PostgreSQL est vide, pas de backup nécessaire"
+fi
+
+echo ""
+
+echo "5️⃣  Suppression de l'ancien StatefulSet PostgreSQL..."
+# Supprimer le StatefulSet mais garder les pods temporairement
+kubectl delete statefulset keycloak-postgresql -n "$NAMESPACE" --cascade=orphan
+
+echo "✅ StatefulSet supprimé"
+echo ""
+
+echo "6️⃣  Suppression de l'ancien pod PostgreSQL..."
+kubectl delete pod "$PG_POD" -n "$NAMESPACE" --grace-period=30
+
+echo "✅ Pod supprimé"
+echo ""
+
+echo "7️⃣  Recréation de PostgreSQL avec persistence..."
+helm upgrade --install keycloak-postgresql bitnami/postgresql \
   --namespace "$NAMESPACE" \
-  --reuse-values \
+  --set auth.username=keycloak \
+  --set auth.password=keycloak123 \
+  --set auth.database=keycloak \
   --set primary.persistence.enabled=true \
   --set primary.persistence.size=10Gi \
   --set primary.persistence.storageClass=standard \
   --wait \
   --timeout 10m
 
-echo "✅ Persistence PostgreSQL activée"
+echo "✅ PostgreSQL recréé avec persistence"
 echo ""
 
-echo "5️⃣  Attente du redémarrage de PostgreSQL..."
-kubectl rollout status statefulset/keycloak-postgresql -n "$NAMESPACE" --timeout=5m
+echo "8️⃣  Attente que PostgreSQL soit complètement prêt..."
+kubectl wait --for=condition=ready pod/"$PG_POD" -n "$NAMESPACE" --timeout=300s
 
 echo "✅ PostgreSQL prêt avec PVC"
 echo ""
 
 # Vérifier le PVC
+echo "9️⃣  Vérification du PVC créé..."
 kubectl get pvc -n "$NAMESPACE" -l app.kubernetes.io/name=postgresql
+
+# Vérifier le montage
+echo ""
+echo "   Vérification du montage du volume..."
+kubectl exec -n "$NAMESPACE" "$PG_POD" -- df -h /bitnami/postgresql 2>/dev/null | tail -1 || echo "   (vérification manuelle du montage recommandée)"
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════╗"
@@ -167,7 +211,7 @@ echo "║      ÉTAPE 3: RECONFIGURATION KEYCLOAK → POSTGRESQL      ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
-echo "6️⃣  Mise à jour de la configuration Keycloak..."
+echo "🔟 Mise à jour de la configuration Keycloak..."
 
 # Patcher le StatefulSet Keycloak pour utiliser PostgreSQL
 kubectl patch statefulset "$KEYCLOAK_POD" -n "$NAMESPACE" --type=json -p='[
@@ -193,7 +237,7 @@ kubectl patch statefulset "$KEYCLOAK_POD" -n "$NAMESPACE" --type=json -p='[
 echo "✅ StatefulSet patché pour utiliser PostgreSQL"
 echo ""
 
-echo "7️⃣  Redémarrage de Keycloak avec la nouvelle configuration..."
+echo "1️⃣1️⃣  Redémarrage de Keycloak avec la nouvelle configuration..."
 kubectl delete pod "$KEYCLOAK_POD" -n "$NAMESPACE"
 
 echo "⏳ Attente du redémarrage (peut prendre 3-5 min)..."
@@ -202,7 +246,7 @@ kubectl wait --for=condition=ready pod/"$KEYCLOAK_POD" -n "$NAMESPACE" --timeout
 echo "✅ Keycloak redémarré sur PostgreSQL"
 echo ""
 
-echo "8️⃣  Vérification de la connexion PostgreSQL..."
+echo "1️⃣2️⃣  Vérification de la connexion PostgreSQL..."
 sleep 10
 
 # Vérifier les logs pour confirmer PostgreSQL
@@ -216,11 +260,11 @@ fi
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║         ÉTAPE 4: IMPORT DES DONNÉES DANS POSTGRESQL       ║"
+echo "║         ÉTAPE 4: VÉRIFICATION DE L'ADMIN USER             ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
-echo "9️⃣  Recréation de l'utilisateur admin..."
+echo "1️⃣3️⃣  Vérification de l'utilisateur admin..."
 
 # Port-forward pour l'import
 kubectl port-forward -n "$NAMESPACE" "$KEYCLOAK_POD" 8080:8080 &
