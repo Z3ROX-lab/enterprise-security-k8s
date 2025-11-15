@@ -59,7 +59,8 @@ else
 
     # Créer la session screen en mode détaché
     # On utilise -L pour logger la session
-    screen -dmS "$SESSION_NAME" -L bash -c './scripts/port-forward-ingress-stable.sh'
+    # On passe "yes y" pour auto-confirmer le prompt du script
+    screen -dmS "$SESSION_NAME" -L bash -c 'yes y | ./scripts/port-forward-ingress-stable.sh'
 
     sleep 3
 
