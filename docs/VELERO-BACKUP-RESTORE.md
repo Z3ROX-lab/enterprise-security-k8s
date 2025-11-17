@@ -366,7 +366,33 @@ spec:
 
 ## 🌐 Accès à la Console MinIO
 
-Pour visualiser les backups dans MinIO :
+### Méthode 1 : Via Ingress (Recommandé)
+
+Exposer MinIO via l'Ingress NGINX pour un accès permanent :
+
+```bash
+# Configurer l'Ingress pour MinIO
+./scripts/add-minio-ingress.sh
+
+# S'assurer que le port-forward Ingress est actif
+./scripts/start-ingress-portforward.sh
+
+# Accéder à la console MinIO
+# URL: http://minio.local.lab:8080/
+# ou avec HTTPS: https://minio.local.lab:8443/
+# User: minio
+# Password: minio123
+```
+
+**Avantages de l'Ingress :**
+- ✅ Accès permanent (pas besoin de refaire port-forward)
+- ✅ Intégré avec les autres services (Keycloak, Vault, Kibana)
+- ✅ Même workflow que les autres UIs du projet
+- ✅ Prêt pour TLS/HTTPS si configuré
+
+### Méthode 2 : Via Port-Forward (Temporaire)
+
+Pour un accès rapide et temporaire :
 
 ```bash
 # Port-forward vers la console MinIO
@@ -378,12 +404,24 @@ kubectl port-forward -n minio svc/minio 9001:9001
 # Password: minio123
 ```
 
+### Exploration des Backups dans MinIO
+
 Dans la console MinIO :
 1. Cliquer sur **Object Browser**
 2. Ouvrir le bucket **velero**
 3. Explorer les dossiers :
-   - `backups/` : Métadonnées des backups
-   - `restic/` : Données des PVCs
+   - `backups/` : Métadonnées des backups (fichiers JSON)
+   - `restic/` : Données des PVCs (snapshots)
+   - Chaque backup a son propre dossier avec :
+     - `velero-backup.json` : Métadonnées du backup
+     - `<namespace>-<resource>.json.gz` : Ressources sauvegardées
+
+**Ce que vous pouvez faire dans MinIO :**
+- 📊 Voir l'espace utilisé par les backups
+- 🗂️ Explorer le contenu de chaque backup
+- 📥 Télécharger manuellement des backups
+- 🗑️ Gérer le cycle de vie des objets
+- 📈 Monitorer les tendances de croissance du stockage
 
 ---
 
