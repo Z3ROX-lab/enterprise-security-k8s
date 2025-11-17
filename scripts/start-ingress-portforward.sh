@@ -103,6 +103,7 @@ else
         echo "   https://vault.local.lab:8443/ui/"
         echo "   https://kibana.local.lab:8443/"
         echo "   https://dashboard.local.lab:8443/"
+        echo "   https://minio.local.lab:8443/           (Console MinIO - Backups)"
         echo ""
 
         echo "📝 Note: La session screen reste active même si vous fermez le terminal"
