@@ -415,7 +415,7 @@ Après déploiement, vérifiez :
 **✅ Le Kubernetes Dashboard est maintenant opérationnel et accessible via Ingress !**
 
 **URLs de la Stack Complète** :
-- Keycloak : https://keycloak.local.lab:8443/auth/admin/
+- Keycloak : https://keycloak.local.lab:8443/admin/
 - Vault : https://vault.local.lab:8443/ui/
 - Kibana : https://kibana.local.lab:8443/
 - Dashboard : https://dashboard.local.lab:8443/ ✨

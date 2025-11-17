@@ -4,6 +4,10 @@ set -e
 
 SESSION_NAME="ingress-pf"
 
+# Déterminer le répertoire racine du projet
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 echo "╔═══════════════════════════════════════════════════════════╗"
 echo "║     Gestionnaire Port-Forward Ingress (Screen)            ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
@@ -60,7 +64,7 @@ else
     # Créer la session screen en mode détaché
     # On utilise -L pour logger la session
     # On passe "yes y" pour auto-confirmer le prompt du script
-    screen -dmS "$SESSION_NAME" -L bash -c 'yes y | ./scripts/port-forward-ingress-stable.sh'
+    screen -dmS "$SESSION_NAME" -L bash -c "cd '$PROJECT_ROOT' && yes y | ./scripts/port-forward-ingress-stable.sh"
 
     sleep 3
 
@@ -95,7 +99,7 @@ else
         echo ""
 
         echo "🌐 URLs d'accès maintenant disponibles:"
-        echo "   https://keycloak.local.lab:8443/auth/admin/"
+        echo "   https://keycloak.local.lab:8443/admin/"
         echo "   https://vault.local.lab:8443/ui/"
         echo "   https://kibana.local.lab:8443/"
         echo "   https://dashboard.local.lab:8443/"
