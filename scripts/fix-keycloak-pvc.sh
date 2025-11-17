@@ -127,16 +127,14 @@ spec:
             memory: "1Gi"
             cpu: "500m"
         readinessProbe:
-          httpGet:
-            path: /health/ready
+          tcpSocket:
             port: 8080
           initialDelaySeconds: 60
           periodSeconds: 10
         livenessProbe:
-          httpGet:
-            path: /health/live
+          tcpSocket:
             port: 8080
-          initialDelaySeconds: 90
+          initialDelaySeconds: 120
           periodSeconds: 30
 YAML
 
