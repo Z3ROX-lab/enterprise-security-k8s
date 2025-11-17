@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-security
+  namespace: default
+  labels:
+    app: demo-security
+    managed-by: argocd
+    security-demo: "true"
+    falco-monitoring: "enabled"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-security
+  template:
+    metadata:
+      labels:
+        app: demo-security
+        security-demo: "true"
+        falco-monitoring: "enabled"
+      annotations:
+        # Indiquer que cette app est monitored par Falco
+        security.falco.org/monitored: "true"
+    spec:
+      # Sécurité: utiliser un compte de service spécifique
+      serviceAccountName: default
+
+      # Sécurité: Pod Security Context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+      - name: alpine
+        image: alpine:3.20
+        # Commande: sleep infini pour garder le pod actif
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "🔒 Demo Security Container Started"
+            echo "⚠️  Cette application est monitored par Falco"
+            echo ""
+            echo "Falco détectera:"
+            echo "  - Les shells interactifs"
+            echo "  - L'accès aux fichiers sensibles"
+            echo "  - Les modifications système"
+            echo "  - Les processus suspects"
+            echo ""
+            echo "Test: kubectl exec -it deployment/demo-security -- sh"
+            echo ""
+            # Sleep infini
+            while true; do sleep 3600; done
+
+        # Sécurité: Container Security Context
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+
+        # Health checks
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep -v grep | grep sleep"
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "echo ready"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+        # Ressources (minimal)
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+
+        # Volumes
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+
+      volumes:
+      - name: tmp
+        emptyDir: {}

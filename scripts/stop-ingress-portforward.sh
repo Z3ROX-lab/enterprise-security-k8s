@@ -49,6 +49,9 @@ if screen -list 2>/dev/null | grep -q "$SESSION_NAME"; then
         echo "   - https://vault.local.lab:8443/"
         echo "   - https://kibana.local.lab:8443/"
         echo "   - https://dashboard.local.lab:8443/"
+        echo "   - https://minio.local.lab:8443/"
+        echo "   - https://argocd.local.lab:8443/"
+        echo "   - https://gitea.local.lab:8443/"
     fi
 else
     echo "ℹ️  Aucune session screen '$SESSION_NAME' active"

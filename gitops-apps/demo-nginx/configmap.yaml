@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-nginx-config
+  namespace: default
+  labels:
+    app: demo-nginx
+    managed-by: argocd
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name localhost;
+
+        # Sécurité: désactiver les informations de version
+        server_tokens off;
+
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+        }
+
+        # Health check endpoint
+        location /healthz {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        # Sécurité: headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+            root /usr/share/nginx/html;
+        }
+    }

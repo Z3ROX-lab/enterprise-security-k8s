@@ -104,6 +104,8 @@ else
         echo "   https://kibana.local.lab:8443/"
         echo "   https://dashboard.local.lab:8443/"
         echo "   https://minio.local.lab:8443/           (Console MinIO - Backups)"
+        echo "   https://argocd.local.lab:8443/          (ArgoCD - GitOps)"
+        echo "   https://gitea.local.lab:8443/           (Gitea - Git Server)"
         echo ""
 
         echo "📝 Note: La session screen reste active même si vous fermez le terminal"

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-security
+  namespace: default
+  labels:
+    app: demo-security
+    managed-by: argocd
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+  selector:
+    app: demo-security
+  ports:
+  - name: placeholder
+    port: 9090
+    targetPort: 9090
+    protocol: TCP

@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-nginx
+  namespace: argocd
+  labels:
+    app: demo-nginx
+    environment: demo
+  # Finalizers pour nettoyage automatique
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # Projet ArgoCD (default pour la démo)
+  project: default
+
+  # Source: repo Git Gitea
+  source:
+    # URL du repo Gitea (à adapter selon votre configuration)
+    repoURL: http://gitea-http.gitea.svc.cluster.local:3000/demo/demo-nginx.git
+    targetRevision: main
+    path: .
+
+  # Destination: cluster Kubernetes local
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  # Sync policy: automatique
+  syncPolicy:
+    automated:
+      # Auto-sync quand le repo change
+      prune: true          # Supprimer les ressources qui ne sont plus dans Git
+      selfHeal: true       # Corriger les drifts (changements manuels)
+      allowEmpty: false    # Ne pas accepter les repos vides
+
+    # Options de synchronisation
+    syncOptions:
+      - CreateNamespace=false  # Le namespace default existe déjà
+      - PruneLast=true         # Supprimer les ressources en dernier
+      - RespectIgnoreDifferences=true
+
+    # Retry en cas d'échec
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Ignorer certaines différences (optionnel)
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # Ignorer si replicas est modifié manuellement (HPA)
+
+  # Révision d'historique
+  revisionHistoryLimit: 10
