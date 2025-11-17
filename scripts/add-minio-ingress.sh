@@ -68,12 +68,7 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-    # MinIO console nécessite ces headers
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto \$scheme;
-      proxy_set_header X-Forwarded-Host \$host;
-      proxy_set_header X-Forwarded-Port \$server_port;
+    # Headers X-Forwarded-* sont ajoutés automatiquement par NGINX Ingress
 spec:
   ingressClassName: nginx
   rules:
