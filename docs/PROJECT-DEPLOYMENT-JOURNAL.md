@@ -841,6 +841,7 @@ ingress-nginx-controller   LoadBalancer   172.18.255.200   80:30080/TCP,443:3044
 | **Kibana** | security-siem | 1 | ✅ Running | https://kibana.local.lab:8443/ |
 | **Prometheus** | security-siem | 1 | ✅ Running | Port-forward 9090 |
 | **Grafana** | security-siem | 1 | ✅ Running | Port-forward 3000 |
+| **Kubernetes Dashboard** | kubernetes-dashboard | 1 | ✅ Running | https://dashboard.local.lab:8443/ |
 | **Falco** | security-detection | 1 | ✅ Running | - |
 | **Wazuh** | security-detection | - | ⚠️ Déployé | - |
 | **Trivy Operator** | trivy-system | 1 | ✅ Running | - |
@@ -868,10 +869,11 @@ security-iam    keycloak-data-persistent     Bound    pvc-005    2Gi        stan
 ```bash
 kubectl get ingress --all-namespaces
 
-NAMESPACE       NAME               HOSTS                  ADDRESS          PORTS
-security-iam    keycloak-ingress   keycloak.local.lab     172.18.255.200   80, 443
-security-iam    vault-ingress      vault.local.lab        172.18.255.200   80, 443
-security-siem   kibana-ingress     kibana.local.lab       172.18.255.200   80, 443
+NAMESPACE              NAME                           HOSTS                  ADDRESS          PORTS
+security-iam           keycloak-ingress               keycloak.local.lab     172.18.255.200   80, 443
+security-iam           vault-ingress                  vault.local.lab        172.18.255.200   80, 443
+security-siem          kibana-ingress                 kibana.local.lab       172.18.255.200   80, 443
+kubernetes-dashboard   kubernetes-dashboard-ingress   dashboard.local.lab    172.18.255.200   80
 ```
 
 ---
@@ -885,6 +887,7 @@ security-siem   kibana-ingress     kibana.local.lab       172.18.255.200   80, 4
 | **Keycloak** | https://keycloak.local.lab:8443/auth/admin/ | admin | admin123 | IAM / SSO |
 | **Vault** | https://vault.local.lab:8443/ui/ | - | Voir vault-keys.txt | Root Token requis |
 | **Kibana** | https://kibana.local.lab:8443/ | elastic | <nouveau_password> | SIEM |
+| **Dashboard** | https://dashboard.local.lab:8443/ | Token | /tmp/k8s-dashboard-token.txt | K8s GUI |
 
 ### Services Accessibles via Port-Forward
 
@@ -918,6 +921,11 @@ kubectl get secret elasticsearch-master-credentials -n security-siem -o jsonpath
 
 # Credentials PostgreSQL (Keycloak)
 kubectl get secret keycloak-postgresql -n security-iam -o jsonpath='{.data.password}' | base64 -d
+
+# Token Kubernetes Dashboard
+cat /tmp/k8s-dashboard-token.txt
+# OU
+kubectl get secret admin-user-token -n kubernetes-dashboard -o jsonpath='{.data.token}' | base64 -d
 
 # Vault Root Token et Unseal Keys
 cat vault-keys.txt  # Fichier créé lors de l'init Vault
@@ -1100,9 +1108,12 @@ kubectl get pvc --all-namespaces -o json | jq '.items[].spec.resources.requests.
 - ✅ Activation persistence PostgreSQL (10Gi PVC)
 - ✅ Correction Ingress Keycloak (labels manquants)
 - ✅ Correction authentification Kibana
+- ✅ Déploiement Kubernetes Dashboard avec Ingress
+- ✅ Scripts de gestion port-forward avec screen (start/stop/status)
 - ✅ Création script `verify-stack-health.sh`
-- ✅ Documentation complète de la migration
-- ✅ Tous les services accessibles via Ingress
+- ✅ Documentation complète de la migration et du Dashboard
+- ✅ Tous les services accessibles via Ingress (Keycloak, Vault, Kibana, Dashboard)
+- ✅ Nettoyage PVC H2 obsolète
 
 **12/11/2025** :
 - ✅ Déploiement Ingress Keycloak, Vault, Kibana
@@ -1201,8 +1212,8 @@ kubectl get pvc --all-namespaces
 ---
 
 **Document créé le** : 15 Novembre 2025
-**Dernière mise à jour** : 15 Novembre 2025
-**Version** : 1.0
+**Dernière mise à jour** : 15 Novembre 2025 (ajout Kubernetes Dashboard)
+**Version** : 1.1
 **Auteur** : Z3ROX
 
 ---
