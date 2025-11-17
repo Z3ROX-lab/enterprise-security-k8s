@@ -98,6 +98,10 @@ postgresql:
         cpu: 250m
         memory: 256Mi
 
+# Désactiver PostgreSQL HA (on utilise postgresql simple)
+postgresql-ha:
+  enabled: false
+
 # Configuration Gitea
 gitea:
   admin:
