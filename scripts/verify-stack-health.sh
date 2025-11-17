@@ -174,7 +174,7 @@ echo "   PostgreSQL: $PG_OK pod(s) Running"
 echo ""
 echo "🔗 URLs d'Accès (si Ingress configuré):"
 if [ -n "$INGRESS_IP" ]; then
-    echo "   Keycloak: https://keycloak.local.lab:8443/auth/admin/"
+    echo "   Keycloak: https://keycloak.local.lab:8443/admin/"
     echo "   Vault:    https://vault.local.lab:8443/ui/"
     echo ""
     echo "   Vérifiez /etc/hosts:"

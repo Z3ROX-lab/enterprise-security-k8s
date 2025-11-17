@@ -35,7 +35,7 @@ if screen -list 2>/dev/null | grep -q "$SESSION_NAME"; then
 
     echo ""
     echo "🌐 URLs accessibles:"
-    echo "   https://keycloak.local.lab:8443/auth/admin/"
+    echo "   https://keycloak.local.lab:8443/admin/"
     echo "   https://vault.local.lab:8443/ui/"
     echo "   https://kibana.local.lab:8443/"
     echo "   https://dashboard.local.lab:8443/"

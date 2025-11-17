@@ -599,7 +599,7 @@ kubectl delete pod keycloak-0 -n security-iam
 **Résultat** :
 ✅ Endpoints créés
 ✅ Ingress fonctionnel
-✅ Accès via `https://keycloak.local.lab:8443/auth/admin/`
+✅ Accès via `https://keycloak.local.lab:8443/admin/`
 
 ---
 
@@ -834,7 +834,7 @@ ingress-nginx-controller   LoadBalancer   172.18.255.200   80:30080/TCP,443:3044
 
 | Composant | Namespace | Pods | Status | Accès |
 |-----------|-----------|------|--------|-------|
-| **Keycloak** | security-iam | 1 | ✅ Running | https://keycloak.local.lab:8443/auth/admin/ |
+| **Keycloak** | security-iam | 1 | ✅ Running | https://keycloak.local.lab:8443/admin/ |
 | **PostgreSQL (Keycloak)** | security-iam | 1 | ✅ Running | Interne (PVC 10Gi) |
 | **Vault** | security-iam | 3 | ✅ Running (HA) | https://vault.local.lab:8443/ui/ |
 | **Elasticsearch** | security-siem | 1 | ✅ Running | Interne (9200) |
@@ -884,7 +884,7 @@ kubernetes-dashboard   kubernetes-dashboard-ingress   dashboard.local.lab    172
 
 | Service | URL | Username | Password | Notes |
 |---------|-----|----------|----------|-------|
-| **Keycloak** | https://keycloak.local.lab:8443/auth/admin/ | admin | admin123 | IAM / SSO |
+| **Keycloak** | https://keycloak.local.lab:8443/admin/ | admin | admin123 | IAM / SSO |
 | **Vault** | https://vault.local.lab:8443/ui/ | - | Voir vault-keys.txt | Root Token requis |
 | **Kibana** | https://kibana.local.lab:8443/ | elastic | <nouveau_password> | SIEM |
 | **Dashboard** | https://dashboard.local.lab:8443/ | Token | /tmp/k8s-dashboard-token.txt | K8s GUI |

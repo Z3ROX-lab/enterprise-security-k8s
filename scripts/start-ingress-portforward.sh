@@ -99,7 +99,7 @@ else
         echo ""
 
         echo "🌐 URLs d'accès maintenant disponibles:"
-        echo "   https://keycloak.local.lab:8443/auth/admin/"
+        echo "   https://keycloak.local.lab:8443/admin/"
         echo "   https://vault.local.lab:8443/ui/"
         echo "   https://kibana.local.lab:8443/"
         echo "   https://dashboard.local.lab:8443/"
