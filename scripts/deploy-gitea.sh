@@ -74,22 +74,18 @@ ingress:
 persistence:
   enabled: true
   size: 10Gi
-  storageClass: standard
 
 # Configuration de la base de données PostgreSQL
 postgresql:
   enabled: true
-  global:
-    postgresql:
-      auth:
-        username: gitea
-        password: gitea123
-        database: gitea
+  auth:
+    username: gitea
+    password: gitea123
+    database: gitea
   primary:
     persistence:
       enabled: true
       size: 2Gi
-      storageClass: standard
     resources:
       limits:
         cpu: 500m
@@ -100,6 +96,10 @@ postgresql:
 
 # Désactiver PostgreSQL HA (on utilise postgresql simple)
 postgresql-ha:
+  enabled: false
+
+# Désactiver Redis cluster (pas nécessaire pour la démo)
+redis-cluster:
   enabled: false
 
 # Configuration Gitea
