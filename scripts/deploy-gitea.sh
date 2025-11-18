@@ -75,26 +75,11 @@ persistence:
   enabled: true
   size: 10Gi
 
-# Configuration de la base de données PostgreSQL
+# Désactiver PostgreSQL (on utilise SQLite pour simplicité)
 postgresql:
-  enabled: true
-  auth:
-    username: gitea
-    password: gitea123
-    database: gitea
-  primary:
-    persistence:
-      enabled: true
-      size: 2Gi
-    resources:
-      limits:
-        cpu: 500m
-        memory: 512Mi
-      requests:
-        cpu: 250m
-        memory: 256Mi
+  enabled: false
 
-# Désactiver PostgreSQL HA (on utilise postgresql simple)
+# Désactiver PostgreSQL HA
 postgresql-ha:
   enabled: false
 
@@ -125,11 +110,8 @@ gitea:
       LFS_START_SERVER: true
 
     database:
-      DB_TYPE: postgres
-      HOST: gitea-postgresql:5432
-      NAME: gitea
-      USER: gitea
-      PASSWD: gitea123
+      DB_TYPE: sqlite3
+      PATH: /data/gitea/gitea.db
 
     security:
       INSTALL_LOCK: true
