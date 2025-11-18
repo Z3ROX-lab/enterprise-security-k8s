@@ -203,8 +203,8 @@ helm upgrade --install gitea gitea-charts/gitea \
     --namespace "$NAMESPACE" \
     --version "$GITEA_VERSION" \
     --values /tmp/gitea-values.yaml \
-    --wait \
-    --timeout 10m
+    --wait=false \
+    --timeout 15m
 
 echo ""
 echo "✅ Gitea installé avec succès"
